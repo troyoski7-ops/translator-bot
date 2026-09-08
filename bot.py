@@ -1,134 +1,100 @@
 import os
-import json
 import asyncio
 from aiohttp import web
-import edge_tts
-from openai import OpenAI
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from openai import OpenAI
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
-PORT = int(os.environ.get("PORT", 8080))
+# 1. Credentials
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAG1x3qHbG5WMouZ6GiWOtJ5jROMLAbs9tY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
-USER_PREFERENCES = {}
 
-VOICE_MAP = {
-    "malayalam": "ml-IN-MidhunNeural",
-    "french": "fr-FR-HenriNeural",
-    "german": "de-DE-KillianNeural",
-    "english": "en-US-ChristopherNeural",
-    "spanish": "es-ES-AlvaroNeural",
-    "arabic": "ar-SA-HamedNeural",
-    "hindi": "hi-IN-MadhurNeural",
-    "tamil": "ta-IN-ValluvarNeural",
-    "italian": "it-IT-DiegoNeural",
-    "russian": "ru-RU-DmitryNeural",
-    "japanese": "ja-JP-KeitaNeural",
-    "chinese": "zh-CN-YunxiNeural"
-}
-
-def analyze_and_translate(sender_id: int, input_text: str):
-    known_users_str = json.dumps(USER_PREFERENCES)
-    prompt = f"""
-    You are a universal real-time multilingual translator for a 2-person chat.
-    Input Text: "{input_text}"
-    Current Speaker ID: {sender_id}
-    Known users and their primary languages so far: {known_users_str}
-
-    Instructions:
-    1. Detect the language of the 'Input Text'.
-    2. Determine the target language based on the other user's known language. Default to English if unknown.
-    3. Provide natural, conversational translation.
-
-    Return JSON ONLY with this structure:
-    {{
-      "detected_language": "LanguageName",
-      "target_language": "TargetLanguageName",
-      "translated_text": "translated content here"
-    }}
-    """
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        temperature=0.2
-    )
-    data = json.loads(response.choices[0].message.content)
-    detected_lang = data.get("detected_language", "English").strip()
-    target_lang = data.get("target_language", "English").strip()
-    translated_text = data.get("translated_text", "").strip()
-    USER_PREFERENCES[sender_id] = detected_lang
-    return detected_lang, target_lang, translated_text
-
-async def generate_voice(text: str, target_lang: str, filename: str):
-    lang_key = target_lang.lower()
-    voice_name = VOICE_MAP.get(lang_key, "en-US-ChristopherNeural")
-    try:
-        communicate = edge_tts.Communicate(text, voice_name)
-        await communicate.save(filename)
-        return True
-    except Exception:
-        return False
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message:
-        return
-
-    sender_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-    original_text = ""
-
-    if update.message.voice:
-        voice_file = await update.message.voice.get_file()
-        in_path = f"voice_in_{update.message.id}.ogg"
-        await voice_file.download_to_drive(in_path)
-        with open(in_path, "rb") as audio:
-            transcription = client.audio.transcriptions.create(model="whisper-1", file=audio)
-        original_text = transcription.text
-        if os.path.exists(in_path):
-            os.remove(in_path)
-    elif update.message.text:
-        original_text = update.message.text
-
-    if not original_text.strip():
-        return
-
-    detected_lang, target_lang, translated_text = analyze_and_translate(sender_id, original_text)
-
-    header_text = f"🌐 **[{target_lang}]** {translated_text}\n_(From {detected_lang})_"
-    await update.message.reply_text(header_text, parse_mode="Markdown")
-
-    out_path = f"voice_out_{update.message.id}.mp3"
-    voice_success = await generate_voice(translated_text, target_lang, out_path)
-
-    if voice_success and os.path.exists(out_path):
-        with open(out_path, "rb") as voice_file:
-            await context.bot.send_voice(chat_id=chat_id, voice=voice_file, reply_to_message_id=update.message.message_id)
-        os.remove(out_path)
-
-async def health_check(request):
+# 2. Render Dummy Web Server (Port Scan Fix)
+async def handle_ping(request):
     return web.Response(text="Bot is running!")
 
 async def start_web_server():
-    server = web.Application()
-    server.router.add_get("/", health_check)
-    runner = web.AppRunner(server)
+    app = web.Application()
+    app.router.add_get('/', handle_ping)
+    app.router.add_get('/healthz', handle_ping)
+    
+    port = int(os.environ.get("PORT", 10000))
+    runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
+    print(f"Web server started on port {port}")
 
+# 3. Telegram Handlers
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Hello! Send me text or a voice message to translate.")
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful translator. Translate text accurately."},
+                {"role": "user", "content": f"Translate this: {user_text}"}
+            ]
+        )
+        translated_text = response.choices[0].message.content
+        await update.message.reply_text(translated_text)
+    except Exception as e:
+        await update.message.reply_text(f"Error processing translation: {str(e)}")
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    voice = update.message.voice or update.message.audio
+    if not voice:
+        return
+    
+    try:
+        file = await context.bot.get_file(voice.file_id)
+        voice_file_path = "temp_voice.ogg"
+        await file.download_to_drive(voice_file_path)
+
+        with open(voice_file_path, "rb") as audio:
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio
+            )
+        
+        user_text = transcript.text
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful translator. Translate voice transcript accurately."},
+                {"role": "user", "content": f"Translate this: {user_text}"}
+            ]
+        )
+        translated_text = response.choices[0].message.content
+        await update.message.reply_text(f"🗣 Recognized: {user_text}\n\n🌐 Translation: {translated_text}")
+
+        if os.path.exists(voice_file_path):
+            os.remove(voice_file_path)
+
+    except Exception as e:
+        await update.message.reply_text(f"Error processing voice: {str(e)}")
+
+# 4. Main Runner
 async def main():
     await start_web_server()
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    print("Bot is running and port is listening...")
-    while True:
-        await asyncio.sleep(3600)
+
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
+
+    print("Bot is starting polling...")
+    async with application:
+        await application.start()
+        await application.updater.start_polling(drop_pending_updates=True)
+        while True:
+            await asyncio.sleep(3600)
 
 if __name__ == "__main__":
     asyncio.run(main())
