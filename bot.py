@@ -11,7 +11,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Render Dummy Web Server
+# Render Dummy Web Server (Port fix)
 async def handle_ping(request):
     return web.Response(text="Bot is running!")
 
