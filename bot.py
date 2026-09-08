@@ -31,8 +31,8 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# Active, verified Groq models
-GROQ_MODELS = ["llama-3.1-8b-instant", "gemma2-9b-it"]
+# Active Groq production models
+GROQ_MODELS = ["llama-3.1-8b-instant", "llama-3.3-70b-specdec"]
 
 def execute_groq_text(prompt):
     if not GROQ_API_KEY:
@@ -53,7 +53,7 @@ def execute_groq_text(prompt):
             last_err = str(e)
             continue
             
-    return f"Groq Error: {last_err[:100]}"
+    return f"Groq Error: {last_err[:120]}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
