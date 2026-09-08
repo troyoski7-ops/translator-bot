@@ -11,12 +11,13 @@ from telegram.ext import (
 )
 from groq import Groq
 
+# API Credentials from Render Environment
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Render Keep-Alive Port Bind
+# Keep-Alive Port Binding for Render Web Service
 async def handle_ping(request):
     return web.Response(text="Translator Core Online via Groq!")
 
@@ -30,8 +31,8 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# Production-stable Groq models
-GROQ_MODELS = ["llama-3.1-8b-instant", "llama3-70b-8192", "mixtral-8x7b-32768"]
+# Active, verified Groq models
+GROQ_MODELS = ["llama-3.1-8b-instant", "gemma2-9b-it"]
 
 def execute_groq_text(prompt):
     if not GROQ_API_KEY:
@@ -46,7 +47,8 @@ def execute_groq_text(prompt):
                 temperature=0.3,
                 max_tokens=400,
             )
-            return completion.choices[0].message.content.strip()
+            if completion and completion.choices:
+                return completion.choices[0].message.content.strip()
         except Exception as e:
             last_err = str(e)
             continue
@@ -180,7 +182,7 @@ async def run_bot():
                 await asyncio.sleep(3600)
         except Exception as e:
             if "Conflict" in str(e):
-                print("Old container closing down. Waiting 10s for takeover...")
+                print("Old container shutting down. Waiting 10s...")
                 try:
                     await app.updater.stop()
                 except Exception:
