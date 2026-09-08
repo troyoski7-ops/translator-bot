@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 from aiohttp import web
 from telegram import Update
@@ -11,15 +12,14 @@ from telegram.ext import (
 )
 from groq import Groq
 
-# 1. Credentials from Render Environment
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# 2. Keep-Alive Web Server for Render
+# Render Keep-Alive Port Bind
 async def handle_ping(request):
-    return web.Response(text="Translator Service Online!")
+    return web.Response(text="Translator Active!")
 
 async def start_web_server():
     app = web.Application()
@@ -31,100 +31,69 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Dynamic Model Discovery (No hardcoded decommissioned names)
-def execute_groq_text(prompt):
+def execute_translation(prompt):
     if not GROQ_API_KEY:
-        return "Error: GROQ_API_KEY is not configured in Render Environment."
+        return "Error: GROQ_API_KEY is missing."
 
     try:
-        # Fetch the live list of models enabled on this API key
         model_list = groq_client.models.list()
         valid_models = [
             m.id for m in model_list.data
             if not any(x in m.id.lower() for x in ["whisper", "guard", "vision", "embed", "safeguard"])
         ]
 
-        if not valid_models:
-            return f"No chat models available on this key. Found: {[m.id for m in model_list.data]}"
-
-        # Query the first available working chat model
-        last_error = ""
         for model_id in valid_models:
             try:
                 completion = groq_client.chat.completions.create(
                     model=model_id,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.3,
-                    max_tokens=400,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are an invisible real-time translator between two chat partners. "
+                                "Translate the given input directly into the other partner's language. "
+                                "Return ONLY the translated sentence. Never explain, never greet, "
+                                "and never include <think> tags or reasoning."
+                            )
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.2,
+                    max_tokens=350,
                 )
                 if completion and completion.choices:
-                    return completion.choices[0].message.content.strip()
-            except Exception as inner_e:
-                last_error = str(inner_e)
+                    res = completion.choices[0].message.content.strip()
+                    res = re.sub(r'<think>.*?</think>', '', res, flags=re.DOTALL).strip()
+                    return res
+            except Exception:
                 continue
 
-        return f"Model error: {last_error[:120]}"
-
+        return "Translation failed. Please try again."
     except Exception as e:
-        return f"Groq Connection Error: {str(e)[:120]}"
+        return f"Error: {str(e)[:80]}"
 
-# 4. Message Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome = (
-        "🌐 **Universal Real-Time Translator**\n\n"
-        "Send any text or voice note. The bot will automatically detect the language "
-        "and translate seamlessly back and forth!"
-    )
-    await update.message.reply_text(welcome, parse_mode="Markdown")
+    await update.message.reply_text("🌐 Send any message or voice note. It will translate automatically!")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-
-    if "lang_a" not in context.chat_data:
-        context.chat_data["lang_a"] = None
-    if "lang_b" not in context.chat_data:
-        context.chat_data["lang_b"] = None
-
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-    l_a = context.chat_data.get("lang_a")
-    l_b = context.chat_data.get("lang_b")
+    recent_pair = context.chat_data.get("pair", [])
 
     prompt = (
-        "You are an omnilingual, adaptive two-way interpreter for two people chatting.\n"
-        f"Chat Memory: [Primary: {l_a}, Partner: {l_b}]\n\n"
-        "Instructions:\n"
-        "1. Identify the input language accurately.\n"
-        "2. If Primary is unset, register input language as Primary.\n"
-        "3. If input is in a different language, register that as Partner.\n"
-        "4. Translation rule:\n"
-        "   - If input is Primary, translate directly to Partner (default to Persian or English if partner language is unknown).\n"
-        "   - If input is Partner or foreign, translate directly into Primary.\n"
-        "5. Output format (strictly 2 lines, no markdown symbols like *, _, or #):\n"
-        "DETECTED: [Language Name]\n"
-        "TRANSLATION: [Translated sentence only]\n\n"
-        f"Input message:\n{text}"
+        f"Known conversation context: {recent_pair}\n"
+        f"Input: \"{text}\"\n\n"
+        "Task:\n"
+        "1. Identify the language of the input.\n"
+        "2. If input matches the first language of this conversation, translate to the second language.\n"
+        "3. If input matches the second language (or a new foreign language), translate to the first language.\n"
+        "4. If this is the start and only one language is seen, translate it into English by default so it can be understood.\n"
+        "Output ONLY the final translation."
     )
 
-    response = execute_groq_text(prompt)
-
-    lines = response.splitlines()
-    detected_lang = None
-    final_translation = response
-
-    for line in lines:
-        if line.startswith("DETECTED:"):
-            detected_lang = line.replace("DETECTED:", "").strip()
-        elif line.startswith("TRANSLATION:"):
-            final_translation = line.replace("TRANSLATION:", "").strip()
-
-    if detected_lang:
-        if not context.chat_data["lang_a"]:
-            context.chat_data["lang_a"] = detected_lang
-        elif detected_lang.lower() != context.chat_data["lang_a"].lower() and not context.chat_data["lang_b"]:
-            context.chat_data["lang_b"] = detected_lang
-
-    await update.message.reply_text(final_translation)
+    translation = execute_translation(prompt)
+    await update.message.reply_text(translation)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     voice = update.message.voice or update.message.audio
@@ -137,9 +106,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     temp_path = f"temp_{voice.file_id}.ogg"
     await file.download_to_drive(temp_path)
 
-    l_a = context.chat_data.get("lang_a")
-    l_b = context.chat_data.get("lang_b")
-
     try:
         with open(temp_path, "rb") as audio_file:
             transcription = groq_client.audio.transcriptions.create(
@@ -149,26 +115,19 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         spoken_text = transcription.text.strip()
 
         prompt = (
-            f"You are a voice translator. Memory: [Lang A: {l_a}, Lang B: {l_b}].\n"
-            "If the text is in Lang A (or Malayalam), translate to Lang B (e.g., Persian/English). "
-            "If it is in Lang B (or foreign), translate to Lang A (Malayalam).\n"
-            "Output strictly the translated sentence only, without markdown symbols.\n\n"
-            f"Text: {spoken_text}"
+            f"Input text from voice note: \"{spoken_text}\"\n"
+            "Translate this directly to the alternate language of this chat. "
+            "Output ONLY the translated sentence."
         )
-        translation = execute_groq_text(prompt)
+        translation = execute_translation(prompt)
 
-        result_card = (
-            f"🗣 Spoken: {spoken_text}\n"
-            f"🌐 Translation: {translation}"
-        )
-        await update.message.reply_text(result_card)
+        await update.message.reply_text(f"🗣 {spoken_text}\n\n🌐 {translation}")
     except Exception as e:
-        await update.message.reply_text(f"Voice error: {str(e)[:100]}")
+        await update.message.reply_text(f"Voice error: {str(e)[:80]}")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-# 5. Polling Loop with Crash Guard
 async def run_bot():
     await start_web_server()
 
@@ -188,20 +147,17 @@ async def run_bot():
 
     while True:
         try:
-            print("Starting polling listener...")
             await app.updater.start_polling(drop_pending_updates=True)
             while True:
                 await asyncio.sleep(3600)
         except Exception as e:
             if "Conflict" in str(e):
-                print("Old container closing down. Waiting 10s for takeover...")
                 try:
                     await app.updater.stop()
                 except Exception:
                     pass
                 await asyncio.sleep(10)
             else:
-                print(f"Network warning: {e}. Retrying in 5s...")
                 await asyncio.sleep(5)
 
 def main():
