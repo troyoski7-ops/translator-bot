@@ -9,12 +9,13 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-from google import genai
+import google.generativeai as genai
 
+# Credentials
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-client = genai.Client(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
 
 # Render Keep-Alive Port Bind
 async def handle_ping(request):
@@ -30,24 +31,22 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# Production Model Fallback
-MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"]
+# Stable production model with fallback
+MODELS = ["gemini-1.5-flash", "gemini-1.5-pro"]
 
 async def execute_gemini(contents):
     last_err = ""
     for model_name in MODELS:
         try:
-            res = client.models.generate_content(
-                model=model_name,
-                contents=contents
-            )
+            model = genai.GenerativeModel(model_name)
+            res = model.generate_content(contents)
             if res and res.text:
                 return res.text.strip()
         except Exception as e:
             last_err = str(e)
             await asyncio.sleep(1)
             continue
-    return f"Translation error: ({last_err[:60]})"
+    return f"Translation error: {last_err[:60]}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
@@ -74,19 +73,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     l_b = context.chat_data.get("lang_b")
 
     prompt = (
-        "You are an omnilingual, adaptive two-way interpreter for any two people chatting in different languages.\n"
-        f"Chat Memory: [Primary Language: {l_a}, Partner Language: {l_b}]\n\n"
-        "Tasks:\n"
-        "1. Detect the language of the incoming message accurately.\n"
-        "2. If Primary Language is unset, set it as the incoming language.\n"
-        "3. If incoming message is in a DIFFERENT language, recognize that as Partner Language.\n"
-        "4. Seamless Translation:\n"
-        "   - If input is in Primary Language, translate it into Partner Language (if Partner Language is not yet known, translate into Persian or English by default).\n"
-        "   - If input is in Partner Language (or any other foreign language), translate directly into Primary Language.\n"
-        "5. Output STRICTLY in this two-line format with NO markdown symbols (*, _, #):\n"
+        "You are an omnilingual, adaptive two-way interpreter for two people chatting in different languages.\n"
+        f"Chat Memory: [Primary: {l_a}, Partner: {l_b}]\n\n"
+        "Instructions:\n"
+        "1. Identify the input language accurately.\n"
+        "2. If Primary is unset, register the input language as Primary.\n"
+        "3. If input is in a different language, register that as Partner.\n"
+        "4. Translation rule:\n"
+        "   - If input is Primary, translate directly to Partner (default to Persian or English if partner language isn't set yet).\n"
+        "   - If input is Partner or foreign, translate directly into Primary.\n"
+        "5. Output format (strictly 2 lines, no markdown symbols like *, _, or #):\n"
         "DETECTED: [Language Name]\n"
-        "TRANSLATION: [Only the translated sentence]"
-        f"\n\nMessage:\n{text}"
+        "TRANSLATION: [Translated sentence only]"
+        f"\n\nInput message:\n{text}"
     )
 
     response = await execute_gemini(prompt)
@@ -124,21 +123,21 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     l_b = context.chat_data.get("lang_b")
 
     try:
-        uploaded_audio = client.files.upload(file=temp_path)
+        uploaded_audio = genai.upload_file(path=temp_path)
         prompt = [
             uploaded_audio,
-            f"Universal voice translator. Memory: [Lang A: {l_a}, Lang B: {l_b}].\n"
+            f"Universal voice interpreter. Memory: [Lang A: {l_a}, Lang B: {l_b}].\n"
             "1. Transcribe the audio accurately.\n"
             "2. Detect the spoken language.\n"
             "3. If spoken in Lang A, translate to Lang B (e.g., Persian). If spoken in Lang B or any foreign language, translate to Lang A.\n"
-            "Format strictly without asterisks:\n"
-            "🗣 Spoken: [Transcribed speech]\n"
+            "Strict clean format without asterisks:\n"
+            "🗣 Spoken: [Transcribed words]\n"
             "🌐 Translation: [Translated sentence]"
         ]
         result = await execute_gemini(prompt)
         await update.message.reply_text(result)
     except Exception as e:
-        await update.message.reply_text("Could not recognize speech. Please speak clearly and try again.")
+        await update.message.reply_text("Could not process voice message. Please try again.")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
