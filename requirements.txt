@@ -1,5 +1,5 @@
 python-telegram-bot
-openai
-edge-tts
+google-genai
 aiohttp
+
 
