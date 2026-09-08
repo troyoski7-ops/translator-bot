@@ -1,3 +1,5 @@
 python-telegram-bot
 openai
 edge-tts
+aiohttp
+
