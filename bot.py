@@ -18,7 +18,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 
 # Render Keep-Alive Port Bind
 async def handle_ping(request):
-    return web.Response(text="Omnilingual Dynamic Engine Online")
+    return web.Response(text="Translator Core Online!")
 
 async def start_web_server():
     app = web.Application()
@@ -30,15 +30,15 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# Multimodal Engine Cascade
-MODELS = ["gemini-2.5-flash", "gemini-1.5-flash"]
+# Production Model Fallback
+MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"]
 
 async def execute_gemini(contents):
     last_err = ""
-    for model in MODELS:
+    for model_name in MODELS:
         try:
             res = client.models.generate_content(
-                model=model,
+                model=model_name,
                 contents=contents
             )
             if res and res.text:
@@ -47,52 +47,50 @@ async def execute_gemini(contents):
             last_err = str(e)
             await asyncio.sleep(1)
             continue
-    return f"വിവർത്തനം ചെയ്യാൻ സാധിച്ചില്ല. ({last_err[:50]})"
+    return f"Translation error: ({last_err[:60]})"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
-        "🌐 **Universal Dynamic Two-Way Translator**\n\n"
-        "ഇവിടെ ഒരു സെറ്റിങ്സും ആവശ്യമില്ല!\n"
-        "• നിങ്ങൾ സംസാരിക്കുന്ന ആളുടെ ഭാഷയും നിങ്ങളുടെ ഭാഷയും ബോട്ട് തനിയെ മനസ്സിലാക്കും.\n"
-        "• ഉദാഹരണത്തിന്: നിങ്ങൾ മലയാളത്തിൽ 'സുഖം' എന്ന് അയക്കുകയും, സുഹൃത്ത് പേർഷ്യനിൽ (Persian/Farsi) മറുപടി അയക്കുകയും ചെയ്താൽ ബോട്ട് ഓട്ടോമാറ്റിക് ആയി രണ്ട് ഭാഷകളും പരസ്പരം വിവർത്തനം ചെയ്യും.\n\n"
-        "ടെക്സ്റ്റോ വോയ്‌സോ നേരിട്ട് അയക്കൂ!"
+        "🌐 **Universal Real-Time Translator**\n\n"
+        "Communicate seamlessly in any language across the world!\n\n"
+        "• **Zero Setup:** No need to configure or select languages manually.\n"
+        "• **Smart Pairing:** The bot detects your language and your friend's language automatically.\n"
+        "• **Two-Way Translation:** If you write or speak in Malayalam, it translates to your partner's language (e.g., Persian, German, French). When they reply in their language, it instantly translates back for you.\n\n"
+        "Simply send any **Text** or **Voice note** to get started!"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    chat_id = update.effective_chat.id
 
-    # ചാറ്റിലെ സംഭാഷണത്തിന്റെ ഭാഷകൾ ട്രാക്ക് ചെയ്യാൻ ഹിസ്റ്ററി സൂക്ഷിക്കുന്നു
     if "lang_a" not in context.chat_data:
         context.chat_data["lang_a"] = None
     if "lang_b" not in context.chat_data:
         context.chat_data["lang_b"] = None
 
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-    l_a = context.chat_data.get("lang_a", "None")
-    l_b = context.chat_data.get("lang_b", "None")
+    l_a = context.chat_data.get("lang_a")
+    l_b = context.chat_data.get("lang_b")
 
     prompt = (
-        "You are an omnilingual, adaptive two-way conversational interpreter for any two people chatting.\n"
-        f"Active chat memory: [Language A: {l_a}, Language B: {l_b}]\n\n"
+        "You are an omnilingual, adaptive two-way interpreter for any two people chatting in different languages.\n"
+        f"Chat Memory: [Primary Language: {l_a}, Partner Language: {l_b}]\n\n"
         "Tasks:\n"
-        "1. Detect the language of the incoming message.\n"
-        "2. If Language A is not set, set it to the incoming language.\n"
-        "3. If the incoming message is in a DIFFERENT language than Language A, lock that as Language B.\n"
-        "4. Seamless Two-Way Translation Rule:\n"
-        "   - If input is in Language A, translate to Language B (if Language B isn't known yet, translate to Persian/English contextual partner).\n"
-        "   - If input is in Language B, translate directly into Language A.\n"
-        "5. Return strictly in this 2-line format (NO asterisks or explanations):\n"
+        "1. Detect the language of the incoming message accurately.\n"
+        "2. If Primary Language is unset, set it as the incoming language.\n"
+        "3. If incoming message is in a DIFFERENT language, recognize that as Partner Language.\n"
+        "4. Seamless Translation:\n"
+        "   - If input is in Primary Language, translate it into Partner Language (if Partner Language is not yet known, translate into Persian or English by default).\n"
+        "   - If input is in Partner Language (or any other foreign language), translate directly into Primary Language.\n"
+        "5. Output STRICTLY in this two-line format with NO markdown symbols (*, _, #):\n"
         "DETECTED: [Language Name]\n"
         "TRANSLATION: [Only the translated sentence]"
-        f"\n\nInput message:\n{text}"
+        f"\n\nMessage:\n{text}"
     )
 
     response = await execute_gemini(prompt)
 
-    # ഔട്ട്പുട്ടിൽ നിന്ന് ട്രാൻസ്ലേഷൻ മാത്രം വേർതിരിക്കുന്നു
     lines = response.splitlines()
     detected_lang = None
     final_translation = response
@@ -103,7 +101,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif line.startswith("TRANSLATION:"):
             final_translation = line.replace("TRANSLATION:", "").strip()
 
-    # ചാറ്റ് മെമ്മറി അപ്ഡേറ്റ് ചെയ്യുന്നു
     if detected_lang:
         if not context.chat_data["lang_a"]:
             context.chat_data["lang_a"] = detected_lang
@@ -117,34 +114,31 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not voice:
         return
 
-    chat_id = update.effective_chat.id
-    l_a = context.chat_data.get("lang_a", "None")
-    l_b = context.chat_data.get("lang_b", "None")
-
-    await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="record_voice")
 
     file = await context.bot.get_file(voice.file_id)
     temp_path = f"temp_{voice.file_id}.ogg"
     await file.download_to_drive(temp_path)
 
+    l_a = context.chat_data.get("lang_a")
+    l_b = context.chat_data.get("lang_b")
+
     try:
         uploaded_audio = client.files.upload(file=temp_path)
         prompt = [
             uploaded_audio,
-            "You are a universal speech interpreter for two people talking in different languages.\n"
-            f"Active languages in memory: [Language A: {l_a}, Language B: {l_b}]\n"
-            "Tasks:\n"
-            "1. Accurately transcribe the spoken voice in its original language.\n"
+            f"Universal voice translator. Memory: [Lang A: {l_a}, Lang B: {l_b}].\n"
+            "1. Transcribe the audio accurately.\n"
             "2. Detect the spoken language.\n"
-            "3. If spoken in Language A, translate to Language B (e.g. Persian). If spoken in Language B (or foreign), translate into Language A.\n"
-            "Output strictly formatted as (no markdown symbols):\n"
-            "🗣 സംസാരം: [Transcribed words]\n"
-            "🌐 വിവർത്തനം: [Translated words]"
+            "3. If spoken in Lang A, translate to Lang B (e.g., Persian). If spoken in Lang B or any foreign language, translate to Lang A.\n"
+            "Format strictly without asterisks:\n"
+            "🗣 Spoken: [Transcribed speech]\n"
+            "🌐 Translation: [Translated sentence]"
         ]
         result = await execute_gemini(prompt)
         await update.message.reply_text(result)
     except Exception as e:
-        await update.message.reply_text("വോയ്‌സ് മനസ്സിലാക്കാൻ സാധിച്ചില്ല, ദയവായി ഒന്നുകൂടി അയക്കൂ.")
+        await update.message.reply_text("Could not recognize speech. Please speak clearly and try again.")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
