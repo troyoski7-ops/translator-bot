@@ -1,5 +1,7 @@
 import os
 import json
+import asyncio
+from aiohttp import web
 import edge_tts
 from openai import OpenAI
 from telegram import Update
@@ -7,6 +9,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+PORT = int(os.environ.get("PORT", 8080))
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 USER_PREFERENCES = {}
@@ -105,11 +108,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_voice(chat_id=chat_id, voice=voice_file, reply_to_message_id=update.message.message_id)
         os.remove(out_path)
 
-def main():
+async def health_check(request):
+    return web.Response(text="Bot is running!")
+
+async def start_web_server():
+    server = web.Application()
+    server.router.add_get("/", health_check)
+    runner = web.AppRunner(server)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+
+async def main():
+    await start_web_server()
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
-    print("Bot is running...")
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    print("Bot is running and port is listening...")
+    while True:
+        await asyncio.sleep(3600)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
