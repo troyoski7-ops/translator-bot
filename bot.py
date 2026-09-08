@@ -30,28 +30,37 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
+# Production-stable Groq models
+GROQ_MODELS = ["llama-3.1-8b-instant", "llama3-70b-8192", "mixtral-8x7b-32768"]
+
 def execute_groq_text(prompt):
     if not GROQ_API_KEY:
         return "Error: GROQ_API_KEY is missing in Render Environment settings!"
-    try:
-        completion = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=400,
-        )
-        return completion.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Groq Error: {str(e)[:100]}"
+    
+    last_err = ""
+    for model in GROQ_MODELS:
+        try:
+            completion = groq_client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=400,
+            )
+            return completion.choices[0].message.content.strip()
+        except Exception as e:
+            last_err = str(e)
+            continue
+            
+    return f"Groq Error: {last_err[:100]}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
         "🌐 **Universal Real-Time Translator**\n\n"
         "Communicate seamlessly in any language across the world!\n\n"
         "• **Zero Setup:** No need to configure or select languages manually.\n"
-        "• **Smart Pairing:** The bot detects your language and your friend's language automatically.\n"
-        "• **Two-Way Translation:** Send text or voice note in any language to get instant translation.\n\n"
-        "Send any message to test!"
+        "• **Smart Pairing:** The bot detects your language and your partner's language automatically.\n"
+        "• **Two-Way Translation:** Send text or voice notes in any language to translate back and forth.\n\n"
+        "Send any message or audio note to begin!"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown")
 
