@@ -29,14 +29,14 @@ async def start_web_server():
 
 # Telegram Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("ഹലോ! എനിക്ക് ടെക്സ്റ്റ് മെസ്സേജോ വോയ്സ് മെസ്സേജോ അയച്ചു തരൂ, ഞാൻ മലയാളത്തിലേക്ക് വിവർത്തനം ചെയ്തു തരാം.")
+    await update.message.reply_text("ഹലോ! എനിക്ക് ടെക്സ്റ്റ് മെസ്സേജോ വോയ്സ് മെസ്സേജോ അയച്ചു തരൂ, ഞാൻ വിവർത്തനം ചെയ്തു തരാം.")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"You are a professional translator. If the following text is in Malayalam, translate it accurately to English. If it is in any other language, translate it to Malayalam. Return ONLY the translated text:\n\n{user_text}"
+            model="gemini-2.0-flash",
+            contents=f"You are a professional translator. If the following text is in Malayalam, translate it accurately to English. If it is in any other language, translate it to Malayalam. Return ONLY the translated text without extra explanation:\n\n{user_text}"
         )
         await update.message.reply_text(response.text)
     except Exception as e:
@@ -55,7 +55,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uploaded_audio = client.files.upload(file=voice_file_path)
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.0-flash",
             contents=[
                 uploaded_audio,
                 "Transcribe this audio accurately. Then translate it: If the spoken language is Malayalam, translate to English. If it is any other language, translate to Malayalam. Output format:\n🗣 Transcript: [Transcribed text]\n🌐 Translation: [Translated text]"
