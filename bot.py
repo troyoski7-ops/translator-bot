@@ -11,13 +11,13 @@ from telegram.ext import (
 )
 from groq import Groq
 
-# 1. Environment Credentials
+# 1. Credentials from Render Environment
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# 2. Web Server for Render Port Binding
+# 2. Keep-Alive Web Server for Render
 async def handle_ping(request):
     return web.Response(text="Translator Service Online!")
 
@@ -31,28 +31,48 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. LLM Translation Core (Production-Stable Model)
+# 3. Dynamic Model Discovery (No hardcoded decommissioned names)
 def execute_groq_text(prompt):
     if not GROQ_API_KEY:
-        return "Error: GROQ_API_KEY is not set in Render Environment variables."
-    try:
-        completion = groq_client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.3,
-            max_tokens=400,
-        )
-        if completion and completion.choices:
-            return completion.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Groq Error: {str(e)[:120]}"
-    return "No response returned."
+        return "Error: GROQ_API_KEY is not configured in Render Environment."
 
-# 4. Handlers
+    try:
+        # Fetch the live list of models enabled on this API key
+        model_list = groq_client.models.list()
+        valid_models = [
+            m.id for m in model_list.data
+            if not any(x in m.id.lower() for x in ["whisper", "guard", "vision", "embed", "safeguard"])
+        ]
+
+        if not valid_models:
+            return f"No chat models available on this key. Found: {[m.id for m in model_list.data]}"
+
+        # Query the first available working chat model
+        last_error = ""
+        for model_id in valid_models:
+            try:
+                completion = groq_client.chat.completions.create(
+                    model=model_id,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.3,
+                    max_tokens=400,
+                )
+                if completion and completion.choices:
+                    return completion.choices[0].message.content.strip()
+            except Exception as inner_e:
+                last_error = str(inner_e)
+                continue
+
+        return f"Model error: {last_error[:120]}"
+
+    except Exception as e:
+        return f"Groq Connection Error: {str(e)[:120]}"
+
+# 4. Message Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
         "🌐 **Universal Real-Time Translator**\n\n"
-        "Send any message or voice note. The bot will automatically detect the language "
+        "Send any text or voice note. The bot will automatically detect the language "
         "and translate seamlessly back and forth!"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown")
@@ -80,7 +100,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "4. Translation rule:\n"
         "   - If input is Primary, translate directly to Partner (default to Persian or English if partner language is unknown).\n"
         "   - If input is Partner or foreign, translate directly into Primary.\n"
-        "5. Output format (strictly 2 lines, NO markdown symbols like *, _, or #):\n"
+        "5. Output format (strictly 2 lines, no markdown symbols like *, _, or #):\n"
         "DETECTED: [Language Name]\n"
         "TRANSLATION: [Translated sentence only]\n\n"
         f"Input message:\n{text}"
@@ -148,7 +168,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-# 5. Continuous Loop with Auto-Recovery
+# 5. Polling Loop with Crash Guard
 async def run_bot():
     await start_web_server()
 
@@ -174,14 +194,14 @@ async def run_bot():
                 await asyncio.sleep(3600)
         except Exception as e:
             if "Conflict" in str(e):
-                print("Old container closing down. Retrying in 10s...")
+                print("Old container closing down. Waiting 10s for takeover...")
                 try:
                     await app.updater.stop()
                 except Exception:
                     pass
                 await asyncio.sleep(10)
             else:
-                print(f"Network glitch: {e}. Retrying in 5s...")
+                print(f"Network warning: {e}. Retrying in 5s...")
                 await asyncio.sleep(5)
 
 def main():
