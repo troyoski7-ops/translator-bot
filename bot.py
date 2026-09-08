@@ -11,15 +11,15 @@ from telegram.ext import (
 )
 from groq import Groq
 
-# API Credentials from Render Environment
+# 1. Environment Credentials
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Keep-Alive Port Binding for Render Web Service
+# 2. Web Server for Render Port Binding
 async def handle_ping(request):
-    return web.Response(text="Translator Core Online via Groq!")
+    return web.Response(text="Translator Service Online!")
 
 async def start_web_server():
     app = web.Application()
@@ -31,38 +31,29 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# Active Groq production models
-GROQ_MODELS = ["llama-3.1-8b-instant", "llama-3.3-70b-specdec"]
-
+# 3. LLM Translation Core (Production-Stable Model)
 def execute_groq_text(prompt):
     if not GROQ_API_KEY:
-        return "Error: GROQ_API_KEY is missing in Render Environment settings!"
-    
-    last_err = ""
-    for model in GROQ_MODELS:
-        try:
-            completion = groq_client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=400,
-            )
-            if completion and completion.choices:
-                return completion.choices[0].message.content.strip()
-        except Exception as e:
-            last_err = str(e)
-            continue
-            
-    return f"Groq Error: {last_err[:120]}"
+        return "Error: GROQ_API_KEY is not set in Render Environment variables."
+    try:
+        completion = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=400,
+        )
+        if completion and completion.choices:
+            return completion.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Groq Error: {str(e)[:120]}"
+    return "No response returned."
 
+# 4. Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
         "🌐 **Universal Real-Time Translator**\n\n"
-        "Communicate seamlessly in any language across the world!\n\n"
-        "• **Zero Setup:** No need to configure or select languages manually.\n"
-        "• **Smart Pairing:** The bot detects your language and your partner's language automatically.\n"
-        "• **Two-Way Translation:** Send text or voice notes in any language to translate back and forth.\n\n"
-        "Send any message or audio note to begin!"
+        "Send any message or voice note. The bot will automatically detect the language "
+        "and translate seamlessly back and forth!"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown")
 
@@ -84,12 +75,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Chat Memory: [Primary: {l_a}, Partner: {l_b}]\n\n"
         "Instructions:\n"
         "1. Identify the input language accurately.\n"
-        "2. If Primary is unset, register the input language as Primary.\n"
+        "2. If Primary is unset, register input language as Primary.\n"
         "3. If input is in a different language, register that as Partner.\n"
         "4. Translation rule:\n"
-        "   - If input is Primary, translate directly to Partner (default to Persian or English if partner language is not yet known).\n"
+        "   - If input is Primary, translate directly to Partner (default to Persian or English if partner language is unknown).\n"
         "   - If input is Partner or foreign, translate directly into Primary.\n"
-        "5. Output format (strictly 2 lines, no markdown symbols like *, _, or #):\n"
+        "5. Output format (strictly 2 lines, NO markdown symbols like *, _, or #):\n"
         "DETECTED: [Language Name]\n"
         "TRANSLATION: [Translated sentence only]\n\n"
         f"Input message:\n{text}"
@@ -141,7 +132,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"You are a voice translator. Memory: [Lang A: {l_a}, Lang B: {l_b}].\n"
             "If the text is in Lang A (or Malayalam), translate to Lang B (e.g., Persian/English). "
             "If it is in Lang B (or foreign), translate to Lang A (Malayalam).\n"
-            "Output strictly the translated sentence only, without notes or markdown symbols.\n\n"
+            "Output strictly the translated sentence only, without markdown symbols.\n\n"
             f"Text: {spoken_text}"
         )
         translation = execute_groq_text(prompt)
@@ -157,6 +148,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
+# 5. Continuous Loop with Auto-Recovery
 async def run_bot():
     await start_web_server()
 
@@ -182,14 +174,14 @@ async def run_bot():
                 await asyncio.sleep(3600)
         except Exception as e:
             if "Conflict" in str(e):
-                print("Old container shutting down. Waiting 10s...")
+                print("Old container closing down. Retrying in 10s...")
                 try:
                     await app.updater.stop()
                 except Exception:
                     pass
                 await asyncio.sleep(10)
             else:
-                print(f"Network warning: {e}. Retrying in 5s...")
+                print(f"Network glitch: {e}. Retrying in 5s...")
                 await asyncio.sleep(5)
 
 def main():
