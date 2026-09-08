@@ -1,7 +1,8 @@
-import os
+    import os
 import asyncio
+from datetime import datetime
 from aiohttp import web
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -18,7 +19,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Global comprehensive language list
+# ആഗോള ഭാഷകളുടെ ലിസ്റ്റ്
 LANGUAGES = [
     ("Arabic", "🇸🇦"), ("Bengali", "🇧🇩"), ("Chinese", "🇨🇳"), ("Dutch", "🇳🇱"),
     ("English", "🇬🇧"), ("French", "🇫🇷"), ("German", "🇩🇪"), ("Greek", "🇬🇷"),
@@ -29,17 +30,24 @@ LANGUAGES = [
     ("Turkish", "🇹🇷"), ("Ukrainian", "🇺🇦"), ("Urdu", "🇵🇰"), ("Vietnamese", "🇻🇳")
 ]
 
-# User preference storage: user_id -> {"from": "English", "to": "German", "nuance": True}
+# User Preferences: user_id -> config
 user_settings = {}
 
 def get_user_config(user_id):
     if user_id not in user_settings:
-        user_settings[user_id] = {"from": "English", "to": "German", "show_phonetics": True}
+        user_settings[user_id] = {
+            "from": "Malayalam",
+            "to": "German",
+            "active": True,
+            "show_phonetics": True,
+            "translations_count": 0,
+            "joined_at": datetime.now().strftime("%Y-%m-%d")
+        }
     return user_settings[user_id]
 
-# Dummy Web Server for Render Keep-Alive
+# Render Keep-Alive Server
 async def handle_ping(request):
-    return web.Response(text="Bot is operational!")
+    return web.Response(text="Bot Core Online & Ready!")
 
 async def start_web_server():
     app = web.Application()
@@ -51,7 +59,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# Resilient Multi-Model Failover
+# Multi-model Failover Cascade
 MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
 
 async def run_gemini(contents):
@@ -69,9 +77,30 @@ async def run_gemini(contents):
                 last_err = str(e)
                 await asyncio.sleep(1)
                 continue
-    return f"Service busy. Please try again in a moment. ({last_err[:60]})"
+    return f"⚠️ Engine Busy. Please retry in a moment. ({last_err[:50]})"
 
-# Paginated Inline Keyboard Generator
+# Dashboard Keyboard Visuals
+def get_dashboard_markup(cfg):
+    status_icon = "🟢 ACTIVE" if cfg["active"] else "🔴 PAUSED"
+    toggle_icon = "🔔 Phonetics: ON" if cfg.get("show_phonetics", True) else "🔕 Phonetics: OFF"
+    
+    keyboard = [
+        [
+            InlineKeyboardButton(f"🗣 {cfg['from']}", callback_data="open_from_0"),
+            InlineKeyboardButton("⇄ SWAP", callback_data="swap_langs"),
+            InlineKeyboardButton(f"🎯 {cfg['to']}", callback_data="open_to_0")
+        ],
+        [
+            InlineKeyboardButton(f"⚡ Status: {status_icon}", callback_data="toggle_power"),
+            InlineKeyboardButton(toggle_icon, callback_data="toggle_phonetics")
+        ],
+        [
+            InlineKeyboardButton("📊 System Status", callback_data="view_status"),
+            InlineKeyboardButton("🌐 Full Language Matrix", callback_data="open_to_0")
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
 def build_language_keyboard(mode, page=0):
     items_per_page = 8
     total_pages = (len(LANGUAGES) + items_per_page - 1) // items_per_page
@@ -87,124 +116,196 @@ def build_language_keyboard(mode, page=0):
 
     nav_row = []
     if page > 0:
-        nav_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"nav_{mode}_{page-1}"))
+        nav_row.append(InlineKeyboardButton("◀ Prev", callback_data=f"nav_{mode}_{page-1}"))
     if page < total_pages - 1:
-        nav_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"nav_{mode}_{page+1}"))
+        nav_row.append(InlineKeyboardButton("Next ▶", callback_data=f"nav_{mode}_{page+1}"))
     if nav_row:
         keyboard.append(nav_row)
 
-    keyboard.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="back_to_menu")])
+    keyboard.append([InlineKeyboardButton("🔙 Return to Console", callback_data="back_dashboard")])
     return InlineKeyboardMarkup(keyboard)
 
-def build_main_menu(cfg):
-    toggle_icon = "✅" if cfg.get("show_phonetics", True) else "❌"
-    keyboard = [
-        [InlineKeyboardButton(f"🗣 My Language: {cfg['from']}", callback_data="open_from_0")],
-        [InlineKeyboardButton(f"🎯 Target Language: {cfg['to']}", callback_data="open_to_0")],
-        [InlineKeyboardButton("🔄 Swap Direction", callback_data="swap_langs")],
-        [InlineKeyboardButton(f"{toggle_icon} Phonetics & Nuance Tips", callback_data="toggle_phonetics")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-# Telegram Command & Callback Handlers
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    cfg = get_user_config(user_id)
-    text = (
-        "🌐 **Universal Smart Translator**\n\n"
-        f"• **Your Language:** {cfg['from']}\n"
-        f"• **Target Language:** {cfg['to']}\n"
-        f"• **Phonetics & Tips:** {'Enabled' if cfg['show_phonetics'] else 'Disabled'}\n\n"
-        "Tap below to customize your languages, then send any **Text** or **Voice message**."
+def render_dashboard_text(cfg, user_name="Traveler"):
+    power_label = "ONLINE & LISTENING" if cfg["active"] else "PAUSED / STANDBY"
+    return (
+        "╔═══════════════════════════╗\n"
+        "   ✦ POLY-WAVE TRANSLATION HUD ✦   \n"
+        "╚═══════════════════════════╝\n\n"
+        f"👤 Operator: {user_name}\n"
+        f"⚡ Core Status: [{power_label}]\n"
+        "─────────────────────────────\n"
+        f"🎙 Channel A : ❮ {cfg['from']} ❯\n"
+        f"🎧 Channel B : ❮ {cfg['to']} ❯\n"
+        f"🔊 Pronunciation & Nuance : {'ACTIVE' if cfg['show_phonetics'] else 'MUTED'}\n"
+        "─────────────────────────────\n"
+        "💡 Quick Tips:\n"
+        "• Send any Voice or Text directly to convert.\n"
+        "• Tap [⇄ SWAP] below to reverse directions.\n"
+        "• Use left menu (/status, /stop, /start) anytime."
     )
-    await update.message.reply_text(text, reply_markup=build_main_menu(cfg), parse_mode="Markdown")
 
+# Telegram Command Handlers
+async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    cfg = get_user_config(user.id)
+    text = render_dashboard_text(cfg, user.first_name)
+    await update.message.reply_text(text, reply_markup=get_dashboard_markup(cfg))
+
+async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    cfg = get_user_config(user.id)
+    power_str = "🟢 LIVE (Active)" if cfg["active"] else "🔴 STANDBY (Paused)"
+    status_card = (
+        "┌───────────────────────────┐\n"
+        "        ❖ SYSTEM DIAGNOSTICS ❖       \n"
+        "└───────────────────────────┘\n\n"
+        f"• Bot State      : {power_str}\n"
+        f"• Active Route   : {cfg['from']} ⟷ {cfg['to']}\n"
+        f"• Phonetic Guide : {'Enabled' if cfg['show_phonetics'] else 'Disabled'}\n"
+        f"• Tasks Handled  : {cfg['translations_count']} translations\n"
+        f"• Engine Server  : Flash Multi-Cascade Online\n"
+        "─────────────────────────────\n"
+        "To toggle listening: Type /stop or /resume"
+    )
+    await update.message.reply_text(status_card, reply_markup=get_dashboard_markup(cfg))
+
+async def stop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    cfg = get_user_config(user.id)
+    cfg["active"] = False
+    stop_msg = (
+        "🛑 **TRANSLATOR SUSPENDED**\n\n"
+        "The bot will ignore incoming messages while on pause.\n"
+        "Tap below or type `/resume` to reactivate."
+    )
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("▶️ RESUME BOT", callback_data="resume_bot")]])
+    await update.message.reply_text(stop_msg, reply_markup=markup, parse_mode="Markdown")
+
+async def resume_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    cfg = get_user_config(user.id)
+    cfg["active"] = True
+    await update.message.reply_text(
+        "⚡ **TRANSLATOR RESUMED**\nReady to accept your Voice and Text messages!",
+        reply_markup=get_dashboard_markup(cfg),
+        parse_mode="Markdown"
+    )
+
+# Callback Actions
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
-    user_id = update.effective_user.id
-    cfg = get_user_config(user_id)
+    user = update.effective_user
+    cfg = get_user_config(user.id)
 
     if data.startswith("open_") or data.startswith("nav_"):
         _, mode, page = data.split("_")
-        title = "Your Language (Input)" if mode == "from" else "Target Language (Output)"
+        mode_title = "Input Language (Channel A)" if mode == "from" else "Target Language (Channel B)"
         await query.edit_message_text(
-            f"Select **{title}**:",
-            reply_markup=build_language_keyboard(mode, int(page)),
-            parse_mode="Markdown"
+            f"Select {mode_title}:",
+            reply_markup=build_language_keyboard(mode, int(page))
         )
 
     elif data.startswith("set_"):
         _, mode, lang = data.split("_")
         cfg[mode] = lang
         await query.edit_message_text(
-            f"✅ **Preferences Saved!**\n\n• **Your Language:** {cfg['from']}\n• **Target Language:** {cfg['to']}",
-            reply_markup=build_main_menu(cfg),
-            parse_mode="Markdown"
+            render_dashboard_text(cfg, user.first_name),
+            reply_markup=get_dashboard_markup(cfg)
         )
 
     elif data == "swap_langs":
         cfg["from"], cfg["to"] = cfg["to"], cfg["from"]
         await query.edit_message_text(
-            f"🔄 **Direction Swapped!**\n\n• **Your Language:** {cfg['from']}\n• **Target Language:** {cfg['to']}",
-            reply_markup=build_main_menu(cfg),
-            parse_mode="Markdown"
+            render_dashboard_text(cfg, user.first_name),
+            reply_markup=get_dashboard_markup(cfg)
+        )
+
+    elif data == "toggle_power":
+        cfg["active"] = not cfg["active"]
+        await query.edit_message_text(
+            render_dashboard_text(cfg, user.first_name),
+            reply_markup=get_dashboard_markup(cfg)
+        )
+
+    elif data == "resume_bot":
+        cfg["active"] = True
+        await query.edit_message_text(
+            render_dashboard_text(cfg, user.first_name),
+            reply_markup=get_dashboard_markup(cfg)
         )
 
     elif data == "toggle_phonetics":
         cfg["show_phonetics"] = not cfg.get("show_phonetics", True)
-        status = "enabled" if cfg["show_phonetics"] else "disabled"
         await query.edit_message_text(
-            f"ℹ️ Phonetic pronunciation & tone tips **{status}**.",
-            reply_markup=build_main_menu(cfg),
-            parse_mode="Markdown"
+            render_dashboard_text(cfg, user.first_name),
+            reply_markup=get_dashboard_markup(cfg)
         )
 
-    elif data == "back_to_menu":
+    elif data == "view_status":
+        await status_cmd(update, context)
+
+    elif data == "back_dashboard":
         await query.edit_message_text(
-            "⚙️ **Translation Configuration:**",
-            reply_markup=build_main_menu(cfg),
-            parse_mode="Markdown"
+            render_dashboard_text(cfg, user.first_name),
+            reply_markup=get_dashboard_markup(cfg)
         )
 
-# Content Processing
+# Text and Voice Message Processors
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    cfg = get_user_config(user_id)
-    text = update.message.text
+    user = update.effective_user
+    cfg = get_user_config(user.id)
 
+    if not cfg["active"]:
+        return
+
+    text = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-    phonetic_instruction = (
-        "Include a line with simple pronunciation/phonetics if the target script is non-Latin or tricky, "
-        "and append a brief cultural tone nuance if relevant (e.g., formal vs informal address)."
-        if cfg.get("show_phonetics", True) else "Return ONLY the translated text."
+    phonetic_clause = (
+        "Provide a 2nd line with simplified readable phonetic pronunciation, and a 3rd line with a 1-sentence cultural/tone note if appropriate (e.g., formal vs informal address)."
+        if cfg.get("show_phonetics", True) else "Provide only the direct translation."
     )
 
     prompt = (
-        f"You are an expert bilingual interpreter between {cfg['from']} and {cfg['to']}.\n"
-        f"Task:\n"
-        f"1. Detect whether the input is primarily in {cfg['from']} or {cfg['to']}.\n"
-        f"2. If in {cfg['from']}, translate to {cfg['to']}. If in {cfg['to']} or another language, translate to {cfg['from']}.\n"
-        f"3. {phonetic_instruction}\n"
-        f"Format the output cleanly as:\n"
-        f"🌐 **Translation:** [Translated text]\n"
-        f"🗣 **Pronunciation:** [Phonetic transcription if applicable]\n"
-        f"💡 **Note:** [1 short tone/nuance note if applicable]\n\n"
+        f"You are a futuristic bilingual translation core between {cfg['from']} and {cfg['to']}.\n"
+        f"1. Detect whether the input is in {cfg['from']} or {cfg['to']} (or other foreign).\n"
+        f"2. If in {cfg['from']}, translate into natural {cfg['to']}. If in {cfg['to']} or foreign, translate into {cfg['from']}.\n"
+        f"3. {phonetic_clause}\n"
+        f"Strict formatting without markdown stars or hashes:\n"
+        f"Translation: [Translated text]\n"
+        f"Pronunciation: [Phonetic pronunciation if enabled]\n"
+        f"Nuance: [Short tip if relevant]\n\n"
         f"Input:\n{text}"
     )
 
     result = await run_gemini(prompt)
-    await update.message.reply_text(result, parse_mode="Markdown")
+    cfg["translations_count"] += 1
+
+    formatted_card = (
+        "╭───────────────────────────\n"
+        f"│ 🌐 ROUTE: {cfg['from']} ⇄ {cfg['to']}\n"
+        "├───────────────────────────\n"
+        f"{result}\n"
+        "╰───────────────────────────"
+    )
+
+    try:
+        await update.message.reply_text(formatted_card)
+    except Exception:
+        await update.message.reply_text(result)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    cfg = get_user_config(user.id)
+
+    if not cfg["active"]:
+        return
+
     voice = update.message.voice or update.message.audio
     if not voice:
         return
-
-    user_id = update.effective_user.id
-    cfg = get_user_config(user_id)
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="record_voice")
 
@@ -216,26 +317,51 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uploaded_audio = client.files.upload(file=temp_path)
         contents = [
             uploaded_audio,
-            f"You are a native interpreter between {cfg['from']} and {cfg['to']}.\n"
-            f"1. Transcribe the spoken audio accurately in its native language.\n"
-            f"2. Translate it into the opposite language ({cfg['to']} if spoken in {cfg['from']}, or {cfg['from']} if spoken in foreign language).\n"
-            f"3. Provide simple phonetic guide for pronunciation.\n"
-            f"Format:\n"
-            f"🎙 **Transcript:** [Original speech]\n"
-            f"🌐 **Translation:** [Translated text]\n"
-            f"🗣 **Pronunciation:** [Phonetics]"
+            f"You are a native conversational interpreter between {cfg['from']} and {cfg['to']}.\n"
+            f"1. Transcribe the exact spoken words in the audio.\n"
+            f"2. Translate it into the opposite language ({cfg['to']} if spoken in {cfg['from']}, or {cfg['from']} if foreign).\n"
+            f"3. Provide phonetic pronunciation guide.\n"
+            f"Format strictly without asterisks:\n"
+            f"Transcript: [Original speech]\n"
+            f"Translation: [Target translation]\n"
+            f"Pronunciation: [Pronunciation guide]"
         ]
         result = await run_gemini(contents)
-        await update.message.reply_text(result, parse_mode="Markdown")
+        cfg["translations_count"] += 1
+
+        voice_card = (
+            "╭─── 🎙 VOICE DECODER ──────\n"
+            f"│ 🌐 ROUTE: {cfg['from']} ⇄ {cfg['to']}\n"
+            "├───────────────────────────\n"
+            f"{result}\n"
+            "╰───────────────────────────"
+        )
+        await update.message.reply_text(voice_card)
+    except Exception as e:
+        await update.message.reply_text(f"Voice decoder interrupted: {e}")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
+# Set Menu Commands for Left Side Menu Button
+async def post_init(application):
+    commands = [
+        BotCommand("start", "Launch Interactive Console"),
+        BotCommand("status", "View System Diagnostics & Stats"),
+        BotCommand("stop", "Pause Translation Mode"),
+        BotCommand("resume", "Reactivate Translation Mode"),
+    ]
+    await application.bot.set_my_commands(commands)
+
 async def main():
     await start_web_server()
 
-    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
+    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).post_init(post_init).build()
+    
+    application.add_handler(CommandHandler("start", start_cmd))
+    application.add_handler(CommandHandler("status", status_cmd))
+    application.add_handler(CommandHandler("stop", stop_cmd))
+    application.add_handler(CommandHandler("resume", resume_cmd))
     application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
@@ -248,3 +374,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
