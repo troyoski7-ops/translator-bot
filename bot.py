@@ -11,9 +11,11 @@ from telegram.ext import (
 )
 import google.generativeai as genai
 
-# Credentials
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+if not GEMINI_API_KEY:
+    print("WARNING: GEMINI_API_KEY is not set in Render Environment Variables!")
 
 genai.configure(api_key=GEMINI_API_KEY)
 
@@ -31,22 +33,29 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# Stable production model with fallback
-MODELS = ["gemini-1.5-flash", "gemini-1.5-pro"]
+# API കീയിൽ ലഭ്യമായ ആദ്യത്തെ വർക്കിംഗ് മോഡൽ എടുക്കുന്നു
+def get_working_model():
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                if '1.5-flash' in m.name or 'gemini-pro' in m.name:
+                    return genai.GenerativeModel(m.name)
+        return genai.GenerativeModel('gemini-1.5-flash')
+    except Exception:
+        return genai.GenerativeModel('gemini-1.5-flash')
 
 async def execute_gemini(contents):
-    last_err = ""
-    for model_name in MODELS:
-        try:
-            model = genai.GenerativeModel(model_name)
-            res = model.generate_content(contents)
-            if res and res.text:
-                return res.text.strip()
-        except Exception as e:
-            last_err = str(e)
-            await asyncio.sleep(1)
-            continue
-    return f"Translation error: {last_err[:60]}"
+    if not GEMINI_API_KEY:
+        return "Error: GEMINI_API_KEY is missing in Render Environment settings!"
+    
+    try:
+        model = get_working_model()
+        res = model.generate_content(contents)
+        if res and res.text:
+            return res.text.strip()
+    except Exception as e:
+        return f"API Error: {str(e)[:100]}"
+    return "No response received."
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
@@ -54,8 +63,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Communicate seamlessly in any language across the world!\n\n"
         "• **Zero Setup:** No need to configure or select languages manually.\n"
         "• **Smart Pairing:** The bot detects your language and your friend's language automatically.\n"
-        "• **Two-Way Translation:** If you write or speak in Malayalam, it translates to your partner's language (e.g., Persian, German, French). When they reply in their language, it instantly translates back for you.\n\n"
-        "Simply send any **Text** or **Voice note** to get started!"
+        "• **Two-Way Translation:** Send text or voice in any language and it translates instantly.\n\n"
+        "Send any message to test!"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown")
 
@@ -73,14 +82,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     l_b = context.chat_data.get("lang_b")
 
     prompt = (
-        "You are an omnilingual, adaptive two-way interpreter for two people chatting in different languages.\n"
+        "You are an omnilingual, adaptive two-way interpreter for two people chatting.\n"
         f"Chat Memory: [Primary: {l_a}, Partner: {l_b}]\n\n"
-        "Instructions:\n"
+        "Tasks:\n"
         "1. Identify the input language accurately.\n"
         "2. If Primary is unset, register the input language as Primary.\n"
         "3. If input is in a different language, register that as Partner.\n"
         "4. Translation rule:\n"
-        "   - If input is Primary, translate directly to Partner (default to Persian or English if partner language isn't set yet).\n"
+        "   - If input is Primary, translate directly to Partner (default to Persian/English if partner language is not yet known).\n"
         "   - If input is Partner or foreign, translate directly into Primary.\n"
         "5. Output format (strictly 2 lines, no markdown symbols like *, _, or #):\n"
         "DETECTED: [Language Name]\n"
@@ -129,7 +138,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Universal voice interpreter. Memory: [Lang A: {l_a}, Lang B: {l_b}].\n"
             "1. Transcribe the audio accurately.\n"
             "2. Detect the spoken language.\n"
-            "3. If spoken in Lang A, translate to Lang B (e.g., Persian). If spoken in Lang B or any foreign language, translate to Lang A.\n"
+            "3. If spoken in Lang A, translate to Lang B. If spoken in Lang B or any foreign language, translate to Lang A.\n"
             "Strict clean format without asterisks:\n"
             "🗣 Spoken: [Transcribed words]\n"
             "🌐 Translation: [Translated sentence]"
@@ -137,7 +146,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = await execute_gemini(prompt)
         await update.message.reply_text(result)
     except Exception as e:
-        await update.message.reply_text("Could not process voice message. Please try again.")
+        await update.message.reply_text(f"Voice error: {e}")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
@@ -171,3 +180,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+ 
