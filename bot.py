@@ -3,15 +3,15 @@ import asyncio
 from aiohttp import web
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-from openai import OpenAI
+from google import genai
 
-# 1. Credentials
+# Credentials
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAG1x3qHbG5WMouZ6GiWOtJ5jROMLAbs9tY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 2. Render Dummy Web Server (Port Scan Fix)
+# Render Dummy Web Server
 async def handle_ping(request):
     return web.Response(text="Bot is running!")
 
@@ -27,24 +27,20 @@ async def start_web_server():
     await site.start()
     print(f"Web server started on port {port}")
 
-# 3. Telegram Handlers
+# Telegram Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hello! Send me text or a voice message to translate.")
+    await update.message.reply_text("ഹലോ! എനിക്ക് ടെക്സ്റ്റ് മെസ്സേജോ വോയ്സ് മെസ്സേജോ അയച്ചു തരൂ, ഞാൻ മലയാളത്തിലേക്ക് വിവർത്തനം ചെയ്തു തരാം.")
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful translator. Translate text accurately."},
-                {"role": "user", "content": f"Translate this: {user_text}"}
-            ]
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=f"You are a professional translator. If the following text is in Malayalam, translate it accurately to English. If it is in any other language, translate it to Malayalam. Return ONLY the translated text:\n\n{user_text}"
         )
-        translated_text = response.choices[0].message.content
-        await update.message.reply_text(translated_text)
+        await update.message.reply_text(response.text)
     except Exception as e:
-        await update.message.reply_text(f"Error processing translation: {str(e)}")
+        await update.message.reply_text(f"Error: {str(e)}")
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     voice = update.message.voice or update.message.audio
@@ -56,23 +52,17 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         voice_file_path = "temp_voice.ogg"
         await file.download_to_drive(voice_file_path)
 
-        with open(voice_file_path, "rb") as audio:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio
-            )
-        
-        user_text = transcript.text
-        
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "You are a helpful translator. Translate voice transcript accurately."},
-                {"role": "user", "content": f"Translate this: {user_text}"}
+        uploaded_audio = client.files.upload(file=voice_file_path)
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                uploaded_audio,
+                "Transcribe this audio accurately. Then translate it: If the spoken language is Malayalam, translate to English. If it is any other language, translate to Malayalam. Output format:\n🗣 Transcript: [Transcribed text]\n🌐 Translation: [Translated text]"
             ]
         )
-        translated_text = response.choices[0].message.content
-        await update.message.reply_text(f"🗣 Recognized: {user_text}\n\n🌐 Translation: {translated_text}")
+        
+        await update.message.reply_text(response.text)
 
         if os.path.exists(voice_file_path):
             os.remove(voice_file_path)
@@ -80,7 +70,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"Error processing voice: {str(e)}")
 
-# 4. Main Runner
+# Main Runner
 async def main():
     await start_web_server()
 
