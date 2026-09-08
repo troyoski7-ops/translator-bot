@@ -18,49 +18,45 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ലഭ്യമായ പ്രധാന ഭാഷകൾ
-SUPPORTED_LANGUAGES = {
-    "ml": "Malayalam",
-    "en": "English",
-    "fr": "French",
-    "de": "German",
-    "ar": "Arabic",
-    "es": "Spanish",
-    "ru": "Russian",
-    "hi": "Hindi",
-    "ta": "Tamil",
-    "it": "Italian",
-    "ja": "Japanese",
-    "zh": "Chinese"
-}
+# Global comprehensive language list
+LANGUAGES = [
+    ("Arabic", "🇸🇦"), ("Bengali", "🇧🇩"), ("Chinese", "🇨🇳"), ("Dutch", "🇳🇱"),
+    ("English", "🇬🇧"), ("French", "🇫🇷"), ("German", "🇩🇪"), ("Greek", "🇬🇷"),
+    ("Hebrew", "🇮🇱"), ("Hindi", "🇮🇳"), ("Indonesian", "🇮🇩"), ("Italian", "🇮🇹"),
+    ("Japanese", "🇯🇵"), ("Korean", "🇰🇷"), ("Malayalam", "🇮🇳"), ("Persian", "🇮🇷"),
+    ("Polish", "🇵🇱"), ("Portuguese", "🇵🇹"), ("Russian", "🇷🇺"), ("Spanish", "🇪🇸"),
+    ("Swedish", "🇸🇪"), ("Tamil", "🇮🇳"), ("Telugu", "🇮🇳"), ("Thai", "🇹🇭"),
+    ("Turkish", "🇹🇷"), ("Ukrainian", "🇺🇦"), ("Urdu", "🇵🇰"), ("Vietnamese", "🇻🇳")
+]
 
-# User Pair Storage (In-memory: defaults to Malayalam <-> French)
-user_pairs = {}
+# User preference storage: user_id -> {"from": "English", "to": "German", "nuance": True}
+user_settings = {}
 
-def get_user_pair(user_id):
-    if user_id not in user_pairs:
-        user_pairs[user_id] = {"my_lang": "Malayalam", "partner_lang": "French"}
-    return user_pairs[user_id]
+def get_user_config(user_id):
+    if user_id not in user_settings:
+        user_settings[user_id] = {"from": "English", "to": "German", "show_phonetics": True}
+    return user_settings[user_id]
 
-# Render Dummy Web Server (Fix port scan)
+# Dummy Web Server for Render Keep-Alive
 async def handle_ping(request):
-    return web.Response(text="Bot is live and running!")
+    return web.Response(text="Bot is operational!")
 
 async def start_web_server():
     app = web.Application()
     app.router.add_get('/', handle_ping)
     app.router.add_get('/healthz', handle_ping)
-    
     port = int(os.environ.get("PORT", 10000))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# Gemini Helper with Auto-failover
-async def generate_gemini(contents):
-    models_to_try = ["gemini-3.6-flash", "gemini-2.5-flash"]
-    for model_name in models_to_try:
+# Resilient Multi-Model Failover
+MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+
+async def run_gemini(contents):
+    last_err = ""
+    for model_name in MODELS_TO_TRY:
         for attempt in range(2):
             try:
                 response = client.models.generate_content(
@@ -70,146 +66,180 @@ async def generate_gemini(contents):
                 if response and response.text:
                     return response.text.strip()
             except Exception as e:
-                if "503" in str(e) and attempt == 0:
-                    await asyncio.sleep(1)
-                    continue
-                break
-    return "സെർവറിൽ ചെറിയ തിരക്കുണ്ട്, ദയവായി വീണ്ടും ശ്രമിക്കൂ."
+                last_err = str(e)
+                await asyncio.sleep(1)
+                continue
+    return f"Service busy. Please try again in a moment. ({last_err[:60]})"
 
-# Command Handlers
+# Paginated Inline Keyboard Generator
+def build_language_keyboard(mode, page=0):
+    items_per_page = 8
+    total_pages = (len(LANGUAGES) + items_per_page - 1) // items_per_page
+    start_idx = page * items_per_page
+    page_langs = LANGUAGES[start_idx:start_idx + items_per_page]
+
+    keyboard = []
+    for i in range(0, len(page_langs), 2):
+        row = [InlineKeyboardButton(f"{page_langs[i][1]} {page_langs[i][0]}", callback_data=f"set_{mode}_{page_langs[i][0]}")]
+        if i + 1 < len(page_langs):
+            row.append(InlineKeyboardButton(f"{page_langs[i+1][1]} {page_langs[i+1][0]}", callback_data=f"set_{mode}_{page_langs[i+1][0]}"))
+        keyboard.append(row)
+
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"nav_{mode}_{page-1}"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"nav_{mode}_{page+1}"))
+    if nav_row:
+        keyboard.append(nav_row)
+
+    keyboard.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="back_to_menu")])
+    return InlineKeyboardMarkup(keyboard)
+
+def build_main_menu(cfg):
+    toggle_icon = "✅" if cfg.get("show_phonetics", True) else "❌"
+    keyboard = [
+        [InlineKeyboardButton(f"🗣 My Language: {cfg['from']}", callback_data="open_from_0")],
+        [InlineKeyboardButton(f"🎯 Target Language: {cfg['to']}", callback_data="open_to_0")],
+        [InlineKeyboardButton("🔄 Swap Direction", callback_data="swap_langs")],
+        [InlineKeyboardButton(f"{toggle_icon} Phonetics & Nuance Tips", callback_data="toggle_phonetics")]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+# Telegram Command & Callback Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    pair = get_user_pair(user_id)
-    
-    msg = (
-        f"👋 ഹലോ!\n\n"
-        f"ഇതൊരു Two-Way Translator Bot ആണ്. നിങ്ങൾക്കും നിങ്ങളുടെ സുഹൃത്തിനും ഏത് ഭാഷയിലും ചാറ്റ് ചെയ്യാം.\n\n"
-        f"📌 **നിലവിലെ സെറ്റിംഗ്സ്:**\n"
-        f"• നിങ്ങളുടെ ഭാഷ: **{pair['my_lang']}**\n"
-        f"• സുഹൃത്തിന്റെ ഭാഷ: **{pair['partner_lang']}**\n\n"
-        f"🔹 ഭാഷ മാറ്റാൻ: /setpair ക്ലിക്ക് ചെയ്യുക.\n"
-        f"🔹 ഇനി നേരിട്ട് Text അല്ലെങ്കിൽ Voice മെസ്സേജ് അയക്കൂ!"
+    cfg = get_user_config(user_id)
+    text = (
+        "🌐 **Universal Smart Translator**\n\n"
+        f"• **Your Language:** {cfg['from']}\n"
+        f"• **Target Language:** {cfg['to']}\n"
+        f"• **Phonetics & Tips:** {'Enabled' if cfg['show_phonetics'] else 'Disabled'}\n\n"
+        "Tap below to customize your languages, then send any **Text** or **Voice message**."
     )
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    await update.message.reply_text(text, reply_markup=build_main_menu(cfg), parse_mode="Markdown")
 
-async def set_pair_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("1️⃣ എന്റെ ഭാഷ മാറ്റുക", callback_data="change_my_lang")],
-        [InlineKeyboardButton("2️⃣ സുഹൃത്തിന്റെ ഭാഷ മാറ്റുക", callback_data="change_partner_lang")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("ഏത് ഭാഷയാണ് മാറ്റേണ്ടത്?", reply_markup=reply_markup)
-
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
     user_id = update.effective_user.id
-    pair = get_user_pair(user_id)
+    cfg = get_user_config(user_id)
 
-    if data in ["change_my_lang", "change_partner_lang"]:
-        target = "my" if data == "change_my_lang" else "partner"
-        buttons = []
-        row = []
-        for code, name in SUPPORTED_LANGUAGES.items():
-            row.append(InlineKeyboardButton(name, callback_data=f"set_{target}_{code}"))
-            if len(row) == 3:
-                buttons.append(row)
-                row = []
-        if row:
-            buttons.append(row)
-        
-        reply_markup = InlineKeyboardMarkup(buttons)
-        target_name = "നിങ്ങളുടെ ഭാഷ" if target == "my" else "സുഹൃത്തിന്റെ ഭാഷ"
-        await query.edit_message_text(f"തിരഞ്ഞെടുക്കുക ({target_name}):", reply_markup=reply_markup)
+    if data.startswith("open_") or data.startswith("nav_"):
+        _, mode, page = data.split("_")
+        title = "Your Language (Input)" if mode == "from" else "Target Language (Output)"
+        await query.edit_message_text(
+            f"Select **{title}**:",
+            reply_markup=build_language_keyboard(mode, int(page)),
+            parse_mode="Markdown"
+        )
 
     elif data.startswith("set_"):
-        _, target, code = data.split("_")
-        chosen_lang = SUPPORTED_LANGUAGES.get(code, "English")
-        
-        if target == "my":
-            pair["my_lang"] = chosen_lang
-        else:
-            pair["partner_lang"] = chosen_lang
-            
-        done_text = (
-            f"✅ **ഭാഷ വിജയകരമായി സെറ്റ് ചെയ്തു!**\n\n"
-            f"• നിങ്ങളുടെ ഭാഷ: **{pair['my_lang']}**\n"
-            f"• സുഹൃത്തിന്റെ ഭാഷ: **{pair['partner_lang']}**\n\n"
-            f"ഇനി ചാറ്റ് ചെയ്യാൻ ടെക്സ്റ്റോ വോയ്‌സോ അയക്കൂ!"
+        _, mode, lang = data.split("_")
+        cfg[mode] = lang
+        await query.edit_message_text(
+            f"✅ **Preferences Saved!**\n\n• **Your Language:** {cfg['from']}\n• **Target Language:** {cfg['to']}",
+            reply_markup=build_main_menu(cfg),
+            parse_mode="Markdown"
         )
-        await query.edit_message_text(done_text, parse_mode="Markdown")
 
-# Message Handlers
+    elif data == "swap_langs":
+        cfg["from"], cfg["to"] = cfg["to"], cfg["from"]
+        await query.edit_message_text(
+            f"🔄 **Direction Swapped!**\n\n• **Your Language:** {cfg['from']}\n• **Target Language:** {cfg['to']}",
+            reply_markup=build_main_menu(cfg),
+            parse_mode="Markdown"
+        )
+
+    elif data == "toggle_phonetics":
+        cfg["show_phonetics"] = not cfg.get("show_phonetics", True)
+        status = "enabled" if cfg["show_phonetics"] else "disabled"
+        await query.edit_message_text(
+            f"ℹ️ Phonetic pronunciation & tone tips **{status}**.",
+            reply_markup=build_main_menu(cfg),
+            parse_mode="Markdown"
+        )
+
+    elif data == "back_to_menu":
+        await query.edit_message_text(
+            "⚙️ **Translation Configuration:**",
+            reply_markup=build_main_menu(cfg),
+            parse_mode="Markdown"
+        )
+
+# Content Processing
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_text = update.message.text
     user_id = update.effective_user.id
-    pair = get_user_pair(user_id)
-    l1, l2 = pair["my_lang"], pair["partner_lang"]
+    cfg = get_user_config(user_id)
+    text = update.message.text
 
-    try:
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        prompt = (
-            f"You are a real-time conversational bilingual translator between {l1} and {l2}.\n"
-            f"Task:\n"
-            f"1. Detect whether the input is primarily in {l1} or {l2} (or related foreign language).\n"
-            f"2. If it is in {l1}, translate it accurately to {l2}.\n"
-            f"3. If it is in {l2} (or any other language), translate it accurately to {l1}.\n"
-            f"4. Output ONLY the translation without any notes or explanations.\n\n"
-            f"Input:\n{user_text}"
-        )
-        result = await generate_gemini(prompt)
-        await update.message.reply_text(result)
-    except Exception as e:
-        await update.message.reply_text(f"Error: {str(e)}")
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+
+    phonetic_instruction = (
+        "Include a line with simple pronunciation/phonetics if the target script is non-Latin or tricky, "
+        "and append a brief cultural tone nuance if relevant (e.g., formal vs informal address)."
+        if cfg.get("show_phonetics", True) else "Return ONLY the translated text."
+    )
+
+    prompt = (
+        f"You are an expert bilingual interpreter between {cfg['from']} and {cfg['to']}.\n"
+        f"Task:\n"
+        f"1. Detect whether the input is primarily in {cfg['from']} or {cfg['to']}.\n"
+        f"2. If in {cfg['from']}, translate to {cfg['to']}. If in {cfg['to']} or another language, translate to {cfg['from']}.\n"
+        f"3. {phonetic_instruction}\n"
+        f"Format the output cleanly as:\n"
+        f"🌐 **Translation:** [Translated text]\n"
+        f"🗣 **Pronunciation:** [Phonetic transcription if applicable]\n"
+        f"💡 **Note:** [1 short tone/nuance note if applicable]\n\n"
+        f"Input:\n{text}"
+    )
+
+    result = await run_gemini(prompt)
+    await update.message.reply_text(result, parse_mode="Markdown")
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     voice = update.message.voice or update.message.audio
     if not voice:
         return
-    
+
     user_id = update.effective_user.id
-    pair = get_user_pair(user_id)
-    l1, l2 = pair["my_lang"], pair["partner_lang"]
+    cfg = get_user_config(user_id)
+
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="record_voice")
+
+    file = await context.bot.get_file(voice.file_id)
+    temp_path = f"temp_{voice.file_id}.ogg"
+    await file.download_to_drive(temp_path)
 
     try:
-        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="record_voice")
-        file = await context.bot.get_file(voice.file_id)
-        voice_file_path = f"temp_{voice.file_id}.ogg"
-        await file.download_to_drive(voice_file_path)
-
-        uploaded_audio = client.files.upload(file=voice_file_path)
-
+        uploaded_audio = client.files.upload(file=temp_path)
         contents = [
             uploaded_audio,
-            f"Listen to the audio.\n"
-            f"1. Accurately transcribe the spoken speech.\n"
-            f"2. If spoken in {l1}, translate to {l2}. If spoken in {l2} (or other languages), translate to {l1}.\n"
-            f"Output strictly in this format:\n"
-            f"🗣 [Transcribed Speech]\n"
-            f"🌐 [Translated Text]"
+            f"You are a native interpreter between {cfg['from']} and {cfg['to']}.\n"
+            f"1. Transcribe the spoken audio accurately in its native language.\n"
+            f"2. Translate it into the opposite language ({cfg['to']} if spoken in {cfg['from']}, or {cfg['from']} if spoken in foreign language).\n"
+            f"3. Provide simple phonetic guide for pronunciation.\n"
+            f"Format:\n"
+            f"🎙 **Transcript:** [Original speech]\n"
+            f"🌐 **Translation:** [Translated text]\n"
+            f"🗣 **Pronunciation:** [Phonetics]"
         ]
-        
-        result_text = await generate_gemini(contents)
-        await update.message.reply_text(result_text)
+        result = await run_gemini(contents)
+        await update.message.reply_text(result, parse_mode="Markdown")
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
-        if os.path.exists(voice_file_path):
-            os.remove(voice_file_path)
-    except Exception as e:
-        await update.message.reply_text("വോയ്സ് പ്രോസസ്സ് ചെയ്യാൻ സാധിച്ചില്ല, ദയവായി വീണ്ടും അയക്കൂ.")
-
-# Main Runner
 async def main():
     await start_web_server()
 
     application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("setpair", set_pair_command))
-    application.add_handler(CallbackQueryHandler(button_callback))
+    application.add_handler(CallbackQueryHandler(handle_callback))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
 
-    print("Two-way Multi-language Bot is starting polling...")
     async with application:
         await application.start()
         await application.updater.start_polling(drop_pending_updates=True)
