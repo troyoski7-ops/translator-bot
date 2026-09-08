@@ -1,6 +1,5 @@
 import os
 import asyncio
-from datetime import datetime
 from aiohttp import web
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
@@ -13,11 +12,13 @@ from telegram.ext import (
 )
 from google import genai
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAG1x3qHbG5WMouZ6GiWOtJ5jROMLAbs9tY")
+# Credentials
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# Global Language Matrix
 LANGUAGES = [
     ("Arabic", "🇸🇦"), ("Bengali", "🇧🇩"), ("Chinese", "🇨🇳"), ("Dutch", "🇳🇱"),
     ("English", "🇬🇧"), ("French", "🇫🇷"), ("German", "🇩🇪"), ("Greek", "🇬🇷"),
@@ -37,12 +38,13 @@ def get_user_config(user_id):
             "to": "German",
             "active": True,
             "show_phonetics": True,
-            "translations_count": 0
+            "count": 0
         }
     return user_settings[user_id]
 
+# Keep-Alive Server for Render
 async def handle_ping(request):
-    return web.Response(text="Bot Core Online & Ready!")
+    return web.Response(text="Bot Status: Online")
 
 async def start_web_server():
     app = web.Application()
@@ -54,41 +56,38 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+# Model Fallback Cascade (gemini-2.5-flash -> 2.0 -> 1.5)
+MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
 
-async def run_gemini(contents):
+async def execute_gemini(contents):
     last_err = ""
-    for model_name in MODELS_TO_TRY:
+    for model in MODELS:
         for attempt in range(2):
             try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents
-                )
-                if response and response.text:
-                    return response.text.strip()
+                res = client.models.generate_content(model=model, contents=contents)
+                if res and res.text:
+                    return res.text.strip()
             except Exception as e:
                 last_err = str(e)
-                await asyncio.sleep(1)
-                continue
-    return f"⚠️ Engine Busy. Please retry. ({last_err[:50]})"
+                if "503" in str(e) or "UNAVAILABLE" in str(e):
+                    await asyncio.sleep(1)
+                    continue
+                break
+    return "Translation service momentarily busy. Please try again."
 
+# UI Generators
 def get_dashboard_markup(cfg):
-    status_icon = "🟢 ACTIVE" if cfg["active"] else "🔴 PAUSED"
-    toggle_icon = "🔔 Phonetics: ON" if cfg.get("show_phonetics", True) else "🔕 Phonetics: OFF"
-    
+    status_text = "🟢 Active" if cfg["active"] else "🔴 Paused"
+    phonetic_text = "🔊 Phonetics: ON" if cfg["show_phonetics"] else "🔇 Phonetics: OFF"
     keyboard = [
         [
             InlineKeyboardButton(f"🗣 {cfg['from']}", callback_data="open_from_0"),
-            InlineKeyboardButton("⇄ SWAP", callback_data="swap_langs"),
+            InlineKeyboardButton("⇄ Swap", callback_data="swap_langs"),
             InlineKeyboardButton(f"🎯 {cfg['to']}", callback_data="open_to_0")
         ],
         [
-            InlineKeyboardButton(f"⚡ {status_icon}", callback_data="toggle_power"),
-            InlineKeyboardButton(toggle_icon, callback_data="toggle_phonetics")
-        ],
-        [
-            InlineKeyboardButton("📊 System Status", callback_data="view_status")
+            InlineKeyboardButton(f"⚡ {status_text}", callback_data="toggle_power"),
+            InlineKeyboardButton(phonetic_text, callback_data="toggle_phonetics")
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -114,47 +113,45 @@ def build_language_keyboard(mode, page=0):
     if nav_row:
         keyboard.append(nav_row)
 
-    keyboard.append([InlineKeyboardButton("🔙 Return to Console", callback_data="back_dashboard")])
+    keyboard.append([InlineKeyboardButton("🔙 Back to Console", callback_data="back_dashboard")])
     return InlineKeyboardMarkup(keyboard)
 
-def render_dashboard_text(cfg, user_name="User"):
-    power_label = "ONLINE & LISTENING" if cfg["active"] else "PAUSED / STANDBY"
+def get_hud_text(cfg, user_name):
+    state = "ACTIVE / LISTENING" if cfg["active"] else "STANDBY / PAUSED"
     return (
         "╔═══════════════════════════╗\n"
-        "   ✦ POLY-WAVE TRANSLATION HUD ✦   \n"
+        "   ✦ UNIVERSAL TRANSLATOR HUD ✦   \n"
         "╚═══════════════════════════╝\n\n"
-        f"👤 Operator: {user_name}\n"
-        f"⚡ Core Status: [{power_label}]\n"
+        f"👤 User: {user_name}\n"
+        f"⚡ Status: [{state}]\n"
         "─────────────────────────────\n"
-        f"🎙 Channel A : ❮ {cfg['from']} ❯\n"
-        f"🎧 Channel B : ❮ {cfg['to']} ❯\n"
-        f"🔊 Pronunciation & Nuance : {'ACTIVE' if cfg['show_phonetics'] else 'MUTED'}\n"
+        f"🎙 Channel A : {cfg['from']}\n"
+        f"🎧 Channel B : {cfg['to']}\n"
+        f"🔊 Pronunciation & Nuance : {'ENABLED' if cfg['show_phonetics'] else 'DISABLED'}\n"
         "─────────────────────────────\n"
-        "💡 Commands:\n"
-        "• Direct text/voice sends will auto-translate.\n"
-        "• Use left menu (/status, /stop, /start) anytime."
+        "• Send any Text or Voice message directly to translate.\n"
+        "• Tap [⇄ Swap] or any language button to switch."
     )
 
+# Handlers
 async def start_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cfg = get_user_config(user.id)
-    text = render_dashboard_text(cfg, user.first_name)
-    await update.message.reply_text(text, reply_markup=get_dashboard_markup(cfg))
+    await update.message.reply_text(get_hud_text(cfg, user.first_name), reply_markup=get_dashboard_markup(cfg))
 
 async def status_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cfg = get_user_config(user.id)
-    power_str = "🟢 LIVE (Active)" if cfg["active"] else "🔴 STANDBY (Paused)"
     status_card = (
         "┌───────────────────────────┐\n"
-        "        ❖ SYSTEM DIAGNOSTICS ❖       \n"
+        "        ❖ DIAGNOSTICS ❖       \n"
         "└───────────────────────────┘\n\n"
-        f"• Bot State      : {power_str}\n"
-        f"• Active Route   : {cfg['from']} ⟷ {cfg['to']}\n"
-        f"• Phonetic Guide : {'Enabled' if cfg['show_phonetics'] else 'Disabled'}\n"
-        f"• Handled Total  : {cfg['translations_count']} translations\n"
+        f"• Status      : {'🟢 Live' if cfg['active'] else '🔴 Paused'}\n"
+        f"• Route       : {cfg['from']} ⟷ {cfg['to']}\n"
+        f"• Phonetics   : {'Enabled' if cfg['show_phonetics'] else 'Disabled'}\n"
+        f"• Processed   : {cfg['count']} requests\n"
         "─────────────────────────────\n"
-        "Control via /stop or /resume"
+        "Quick controls: /stop to pause, /resume to start."
     )
     await update.message.reply_text(status_card, reply_markup=get_dashboard_markup(cfg))
 
@@ -162,126 +159,84 @@ async def stop_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cfg = get_user_config(user.id)
     cfg["active"] = False
-    stop_msg = (
-        "🛑 TRANSLATOR SUSPENDED\n\n"
-        "The bot will ignore incoming messages while on pause.\n"
-        "Tap below or type /resume to reactivate."
-    )
-    markup = InlineKeyboardMarkup([[InlineKeyboardButton("▶️ RESUME BOT", callback_data="resume_bot")]])
-    await update.message.reply_text(stop_msg, reply_markup=markup)
+    await update.message.reply_text("🛑 Translator Paused. Use /resume or tap below to restart.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("▶️ Resume", callback_data="resume_bot")]]))
 
 async def resume_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cfg = get_user_config(user.id)
     cfg["active"] = True
-    await update.message.reply_text(
-        "⚡ TRANSLATOR RESUMED\nReady to accept Voice and Text messages!",
-        reply_markup=get_dashboard_markup(cfg)
-    )
+    await update.message.reply_text("⚡ Translator Active. Send any text or audio message.", reply_markup=get_dashboard_markup(cfg))
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    data = query.data
     user = update.effective_user
     cfg = get_user_config(user.id)
+    data = query.data
 
     if data.startswith("open_") or data.startswith("nav_"):
         _, mode, page = data.split("_")
-        mode_title = "Input Language (Channel A)" if mode == "from" else "Target Language (Channel B)"
-        await query.edit_message_text(
-            f"Select {mode_title}:",
-            reply_markup=build_language_keyboard(mode, int(page))
-        )
+        label = "Input (Channel A)" if mode == "from" else "Target (Channel B)"
+        await query.edit_message_text(f"Select {label}:", reply_markup=build_language_keyboard(mode, int(page)))
 
     elif data.startswith("set_"):
         _, mode, lang = data.split("_")
         cfg[mode] = lang
-        await query.edit_message_text(
-            render_dashboard_text(cfg, user.first_name),
-            reply_markup=get_dashboard_markup(cfg)
-        )
+        await query.edit_message_text(get_hud_text(cfg, user.first_name), reply_markup=get_dashboard_markup(cfg))
 
     elif data == "swap_langs":
         cfg["from"], cfg["to"] = cfg["to"], cfg["from"]
-        await query.edit_message_text(
-            render_dashboard_text(cfg, user.first_name),
-            reply_markup=get_dashboard_markup(cfg)
-        )
+        await query.edit_message_text(get_hud_text(cfg, user.first_name), reply_markup=get_dashboard_markup(cfg))
 
     elif data == "toggle_power":
         cfg["active"] = not cfg["active"]
-        await query.edit_message_text(
-            render_dashboard_text(cfg, user.first_name),
-            reply_markup=get_dashboard_markup(cfg)
-        )
+        await query.edit_message_text(get_hud_text(cfg, user.first_name), reply_markup=get_dashboard_markup(cfg))
 
     elif data == "resume_bot":
         cfg["active"] = True
-        await query.edit_message_text(
-            render_dashboard_text(cfg, user.first_name),
-            reply_markup=get_dashboard_markup(cfg)
-        )
+        await query.edit_message_text(get_hud_text(cfg, user.first_name), reply_markup=get_dashboard_markup(cfg))
 
     elif data == "toggle_phonetics":
-        cfg["show_phonetics"] = not cfg.get("show_phonetics", True)
-        await query.edit_message_text(
-            render_dashboard_text(cfg, user.first_name),
-            reply_markup=get_dashboard_markup(cfg)
-        )
-
-    elif data == "view_status":
-        await status_cmd(update, context)
+        cfg["show_phonetics"] = not cfg["show_phonetics"]
+        await query.edit_message_text(get_hud_text(cfg, user.first_name), reply_markup=get_dashboard_markup(cfg))
 
     elif data == "back_dashboard":
-        await query.edit_message_text(
-            render_dashboard_text(cfg, user.first_name),
-            reply_markup=get_dashboard_markup(cfg)
-        )
+        await query.edit_message_text(get_hud_text(cfg, user.first_name), reply_markup=get_dashboard_markup(cfg))
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cfg = get_user_config(user.id)
-
     if not cfg["active"]:
         return
 
     text = update.message.text
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-    phonetic_clause = (
-        "Provide a 2nd line with readable simplified phonetics, and a 3rd line with a 1-sentence nuance note if applicable."
-        if cfg.get("show_phonetics", True) else "Provide only the direct translation."
+    phonetics_rule = (
+        "Provide a 2nd line with simplified phonetic pronunciation, and a 3rd line with a 1-sentence formality note if helpful."
+        if cfg["show_phonetics"] else "Provide only the direct translation."
     )
 
     prompt = (
-        f"You are a bilingual translation core between {cfg['from']} and {cfg['to']}.\n"
-        f"1. Detect whether input is {cfg['from']} or {cfg['to']} (or other).\n"
-        f"2. If {cfg['from']}, translate to {cfg['to']}. If {cfg['to']}, translate to {cfg['from']}.\n"
-        f"3. {phonetic_clause}\n"
-        f"Do NOT use markdown asterisks (*), hashes (#), or backticks. Strict format:\n"
-        f"Translation: [Translated text]\n"
-        f"Pronunciation: [Phonetics if enabled]\n"
-        f"Nuance: [Tone/grammar tip if relevant]\n\n"
+        f"You are a bilingual translator between {cfg['from']} and {cfg['to']}.\n"
+        f"1. Detect whether the input is in {cfg['from']} or {cfg['to']} (or other).\n"
+        f"2. If in {cfg['from']}, translate to natural {cfg['to']}. If in {cfg['to']}, translate to {cfg['from']}.\n"
+        f"3. {phonetics_rule}\n"
+        f"Do not use markdown stars (*), underscores, or hashes. Format cleanly:\n"
+        f"Translation: [Translation]\n"
+        f"Pronunciation: [Phonetics]\n"
+        f"Note: [Brief nuance if applicable]\n\n"
         f"Input:\n{text}"
     )
 
-    result = await run_gemini(prompt)
-    cfg["translations_count"] += 1
-
-    formatted_card = (
-        "╭───────────────────────────\n"
-        f"│ 🌐 ROUTE: {cfg['from']} ⇄ {cfg['to']}\n"
-        "├───────────────────────────\n"
-        f"{result}\n"
-        "╰───────────────────────────"
-    )
-    await update.message.reply_text(formatted_card)
+    result = await execute_gemini(prompt)
+    cfg["count"] += 1
+    card = f"╭───────────────────────────\n│ 🌐 ROUTE: {cfg['from']} ⇄ {cfg['to']}\n├───────────────────────────\n{result}\n╰───────────────────────────"
+    await update.message.reply_text(card)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cfg = get_user_config(user.id)
-
     if not cfg["active"]:
         return
 
@@ -290,7 +245,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="record_voice")
-
     file = await context.bot.get_file(voice.file_id)
     temp_path = f"temp_{voice.file_id}.ogg"
     await file.download_to_drive(temp_path)
@@ -300,62 +254,68 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         contents = [
             uploaded_audio,
             f"Bilingual voice translator between {cfg['from']} and {cfg['to']}.\n"
-            f"1. Transcribe the audio.\n"
+            f"1. Transcribe the audio accurately.\n"
             f"2. Translate to opposite language.\n"
-            f"3. Phonetic pronunciation guide.\n"
-            f"Do not use markdown symbols:\n"
+            f"3. Provide phonetic guide.\n"
+            f"Do not use markdown formatting symbols:\n"
             f"Transcript: [Original speech]\n"
-            f"Translation: [Target translation]\n"
-            f"Pronunciation: [Phonetics]"
+            f"Translation: [Translated text]\n"
+            f"Pronunciation: [Phonetic guide]"
         ]
-        result = await run_gemini(contents)
-        cfg["translations_count"] += 1
-
-        voice_card = (
-            "╭─── 🎙 VOICE DECODER ──────\n"
-            f"│ 🌐 ROUTE: {cfg['from']} ⇄ {cfg['to']}\n"
-            "├───────────────────────────\n"
-            f"{result}\n"
-            "╰───────────────────────────"
-        )
-        await update.message.reply_text(voice_card)
+        result = await execute_gemini(contents)
+        cfg["count"] += 1
+        card = f"╭─── 🎙 VOICE DECODER ──────\n│ 🌐 ROUTE: {cfg['from']} ⇄ {cfg['to']}\n├───────────────────────────\n{result}\n╰───────────────────────────"
+        await update.message.reply_text(card)
     except Exception as e:
-        await update.message.reply_text(f"Voice error: {e}")
+        await update.message.reply_text(f"Voice processing error: {e}")
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-async def setup_commands(app):
-    commands = [
-        BotCommand("start", "Launch Interactive Console"),
-        BotCommand("status", "System Diagnostics"),
-        BotCommand("stop", "Pause Translation"),
-        BotCommand("resume", "Resume Translation"),
-    ]
-    try:
-        await app.bot.set_my_commands(commands)
-    except Exception as e:
-        print(f"Commands setup warning: {e}")
-
 async def main():
     await start_web_server()
 
-    application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
-    application.add_handler(CommandHandler("start", start_cmd))
-    application.add_handler(CommandHandler("status", status_cmd))
-    application.add_handler(CommandHandler("stop", stop_cmd))
-    application.add_handler(CommandHandler("resume", resume_cmd))
-    application.add_handler(CallbackQueryHandler(handle_callback))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
+    app.add_handler(CommandHandler("start", start_cmd))
+    app.add_handler(CommandHandler("status", status_cmd))
+    app.add_handler(CommandHandler("stop", stop_cmd))
+    app.add_handler(CommandHandler("resume", resume_cmd))
+    app.add_handler(CallbackQueryHandler(handle_callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
 
-    async with application:
-        await application.start()
-        await setup_commands(application)
-        await application.updater.start_polling(drop_pending_updates=True)
-        while True:
-            await asyncio.sleep(3600)
+    await app.initialize()
+    commands = [
+        BotCommand("start", "Open Interface HUD"),
+        BotCommand("status", "System Health & Diagnostics"),
+        BotCommand("stop", "Pause Translator"),
+        BotCommand("resume", "Reactivate Translator"),
+    ]
+    await app.bot.set_my_commands(commands)
+    
+    # Safe cleanup to eliminate leftover webhook states
+    try:
+        await app.bot.delete_webhook(drop_pending_updates=True)
+    except Exception:
+        pass
+
+    await app.start()
+
+    # Resilient polling loop to prevent 409 Conflict shutdown
+    print("Initiating resilient polling...")
+    while True:
+        try:
+            await app.updater.start_polling(drop_pending_updates=True)
+            while True:
+                await asyncio.sleep(3600)
+        except Exception as e:
+            if "Conflict" in str(e):
+                print("Old container still shutting down. Waiting 10 seconds before retrying...")
+                await asyncio.sleep(10)
+            else:
+                print(f"Polling warning: {e}. Retrying in 5 seconds...")
+                await asyncio.sleep(5)
 
 if __name__ == "__main__":
     asyncio.run(main())
