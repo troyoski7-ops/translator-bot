@@ -35,7 +35,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     try:
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.6-flash",
             contents=f"You are a professional translator. If the following text is in Malayalam, translate it accurately to English. If it is in any other language, translate it to Malayalam. Return ONLY the translated text without extra explanation:\n\n{user_text}"
         )
         await update.message.reply_text(response.text)
@@ -55,7 +55,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uploaded_audio = client.files.upload(file=voice_file_path)
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-3.6-flash",
             contents=[
                 uploaded_audio,
                 "Transcribe this audio accurately. Then translate it: If the spoken language is Malayalam, translate to English. If it is any other language, translate to Malayalam. Output format:\n🗣 Transcript: [Transcribed text]\n🌐 Translation: [Translated text]"
