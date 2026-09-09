@@ -88,63 +88,73 @@ def _sync_gemini_call(text, recent_languages=None, is_group=False):
     if not GEMINI_API_KEY:
         return {"error": "GEMINI_API_KEY is not configured in Render!"}
 
-    try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
 
-        if is_group:
-            system_instruction = (
-                "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
-                f"{lang_context}\n"
-                "Rules:\n"
-                "1. Accurately detect source language on the fly.\n"
-                "2. Adapt instantly to language shifts and cross-translate.\n"
-                "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-                "SRC: [Detected Source Language Name]\n"
-                "TRG: [Target Language Name]\n"
-                "TRANS: [Translated Text]\n"
-                "MEANING: [English meaning]\n"
-                "NATIVE_P: [Phonetic in native script]\n"
-                "LATIN_P: [Phonetic in English Latin alphabet]"
-            )
-            prompt = f"{system_instruction}\n\nGroup Message: \"{text}\""
-        else:
-            system_instruction = (
-                "You are a dedicated Personal Language Assistant and Tutor.\n"
-                "Rules:\n"
-                "1. Detect source language accurately.\n"
-                "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
-                "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-                "SRC: [Source Language Name]\n"
-                "TRG: [Target Language Name]\n"
-                "TRANS: [Translated Text]\n"
-                "MEANING: [English meaning]\n"
-                "NATIVE_P: [Phonetic in native script]\n"
-                "LATIN_P: [Phonetic in English Latin alphabet]"
-            )
-            prompt = f"{system_instruction}\n\nMessage: \"{text}\""
-
-        response = client.models.generate_content(
-            model='gemini-3.6-flash',
-            contents=prompt,
+    if is_group:
+        system_instruction = (
+            "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
+            f"{lang_context}\n"
+            "Rules:\n"
+            "1. Accurately detect source language on the fly.\n"
+            "2. Adapt instantly to language shifts and cross-translate.\n"
+            "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+            "SRC: [Detected Source Language Name]\n"
+            "TRG: [Target Language Name]\n"
+            "TRANS: [Translated Text]\n"
+            "MEANING: [English meaning]\n"
+            "NATIVE_P: [Phonetic in native script]\n"
+            "LATIN_P: [Phonetic in English Latin alphabet]"
         )
-        raw = response.text.strip()
-        parsed = {}
-        for line in raw.splitlines():
-            line = line.strip()
-            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-            elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-            elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+        prompt = f"{system_instruction}\n\nGroup Message: \"{text}\""
+    else:
+        system_instruction = (
+            "You are a dedicated Personal Language Assistant and Tutor.\n"
+            "Rules:\n"
+            "1. Detect source language accurately.\n"
+            "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
+            "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+            "SRC: [Source Language Name]\n"
+            "TRG: [Target Language Name]\n"
+            "TRANS: [Translated Text]\n"
+            "MEANING: [English meaning]\n"
+            "NATIVE_P: [Phonetic in native script]\n"
+            "LATIN_P: [Phonetic in English Latin alphabet]"
+        )
+        prompt = f"{system_instruction}\n\nMessage: \"{text}\""
 
-        if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
-            return parsed
-        else:
-            return {"error": "Gemini returned invalid format."}
-    except Exception as e:
-        return {"error": f"Gemini Error: {str(e)}"}
+    # Retry logic for 503 / High demand errors
+    import time
+    max_retries = 3
+    last_error = ""
+
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model='gemini-3.6-flash',
+                contents=prompt,
+            )
+            raw = response.text.strip()
+            parsed = {}
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+
+            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
+                return parsed
+        except Exception as e:
+            last_error = str(e)
+            if "503" in last_error or "unavailable" in last_error.lower():
+                time.sleep(2) # Wait 2 seconds before retry
+                continue
+            break
+
+    return {"error": f"Gemini Error: {last_error}"}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_gemini_call, text, recent_languages, is_group)
