@@ -223,7 +223,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start Command (Updated: Text-Only Architecture Focus)
+# 7. Start Command (Text-Only Input Support)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -334,7 +334,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Animated Visual Card Engine (Text Input Only)
+# 8. Text-Only Input & Translation Handler
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
         return
@@ -436,7 +436,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 9. HD Audio Synthesis Engine
+# 9. Audio Pronunciation Playback (`🔊 Listen`)
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎧 Synthesizing HD Audio Stream...")
@@ -540,10 +540,11 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         await update.message.reply_text(gift_text, parse_mode="HTML")
 
 # 11. Run Engine
-async def run_bot():
+async def main():
     await start_web_server()
 
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("theme", theme_command))
     app.add_handler(CommandHandler("custombg", custom_bg_command))
@@ -561,20 +562,19 @@ async def run_bot():
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
     await app.initialize()
-    try: await app.bot.delete_webhook(drop_pending_updates=True)
-    except Exception: pass
-    app.start()
+    try: 
+        await app.bot.delete_webhook(drop_pending_updates=True)
+    except Exception: 
+        pass
+        
+    await app.start()
+    await app.updater.start_polling(drop_pending_updates=True)
 
-    while True:
-        try:
-            await app.updater.start_polling(drop_pending_updates=True)
-            while True: await asyncio.sleep(3600)
-        except Exception:
-            await asyncio.sleep(5)
-
-def main():
-    try: asyncio.run(run_bot())
-    except (KeyboardInterrupt, SystemExit): pass
+    stop_event = asyncio.Event()
+    await stop_event.wait()
 
 if __name__ == "__main__":
-    main()
+    try: 
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit): 
+        pass
