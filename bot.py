@@ -1,3 +1,4 @@
+
 import os
 import re
 import io
@@ -88,13 +89,12 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Auto-Detect Groq Engine (No Model Not Found Errors)
+# 5. Dynamic Auto-Detect Groq Engine
 def _sync_groq_call(text, recent_languages=None, is_group=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is not configured in Render!"}
 
     client = Groq(api_key=GROQ_API_KEY)
-
     lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
 
     if is_group:
@@ -118,7 +118,7 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
             "You are a dedicated Personal Language Assistant and Tutor.\n"
             "Rules:\n"
             "1. Detect source language accurately.\n"
-            "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
+            "2. If input is English, translate to Malayalam. If input is in any other language (like Persian, German, etc.), translate to English.\n"
             "3. Output MUST strictly contain these 6 lines with exact prefixes:\n"
             "SRC: [Source Language Name]\n"
             "TRG: [Target Language Name]\n"
@@ -129,52 +129,33 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    # Automatically fetch active models available for this API key
-    models_to_try = []
     try:
-        m_list = client.models.list()
-        for m in m_list.data:
-            mid = m.id.lower()
-            if "whisper" not in mid and "guard" not in mid and "embed" not in mid:
-                models_to_try.append(m.id)
-    except Exception:
-        pass
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=400,
+        )
+        raw = completion.choices[0].message.content.strip()
+        parsed = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+            elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+            elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
 
-    # Reliable fallback models list
-    for fallback in ["llama-3.3-70b-versatile", "llama3-70b-8192", "llama-3.1-8b-instant", "gemma2-9b-it"]:
-        if fallback not in models_to_try:
-            models_to_try.append(fallback)
-
-    last_error_msg = ""
-    for model_id in models_to_try:
-        try:
-            completion = client.chat.completions.create(
-                model=model_id,
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.1,
-                max_tokens=400,
-            )
-            raw = completion.choices[0].message.content.strip()
-            parsed = {}
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
-
-            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
-                return parsed
-        except Exception as e:
-            last_error_msg = str(e)
-            continue
-
-    return {"error": f"Groq Error: {last_error_msg}"}
+        if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
+            return parsed
+        else:
+            return {"error": "Groq returned invalid format."}
+    except Exception as e:
+        return {"error": f"Groq Error: {str(e)}"}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
@@ -208,7 +189,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
         "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
         "Free translation quota exhausted!\n\n"
         "• Unlimited Text Translations (Group & Solo)\n"
-        "• High-Definition Audio Pronunciations with 0.75x Slow-Motion\n"
+        "• High-Definition Dual Audio Pronunciations (Source & Target)\n"
         "• Secret VIP Luxury Themes & Custom Backgrounds\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
         "• <b>3 Months ELITE:</b> 120 Stars <i>(20% Off)</i>\n"
@@ -242,18 +223,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "👤 <b>1. Personal Chat (Solo Tutor & Translator):</b>\n"
-        "• Send any text, word, or sentence in any language.\n"
-        "• Get instant meanings, dynamic card UI, dual phonetics, and native HD audio (`🔊 Listen`).\n\n"
+        "• Send any text in any language.\n"
+        "• Get dual audio buttons: Listen to both Source & Target languages!\n\n"
         "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
-        "• Add this bot to any group chat!\n"
-        "• Instantly detects sudden language shifts between members on the fly.\n\n"
+        "• Add this bot to any group chat for instant multi-lingual shifting.\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Holographic UI Theme\n"
         "🖼 /custombg [URL] • Set Custom VIP Background GIF\n"
         "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • VIP Vault\n\n"
-        "Send any text to begin your quantum session!"
+        "Send any text to begin!"
     )
     try:
         await update.message.reply_animation(animation=bg_url, caption=welcome, parse_mode="HTML")
@@ -335,7 +315,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Unified Handler with Dynamic Group Language Shift Tracker
+# 8. Unified Handler with Dual Audio Support (Source & Target)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
         return
@@ -422,7 +402,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     msg_id = placeholder.message_id
-    context.bot_data[f"aud_{msg_id}"] = {
+    
+    # Store both source text and target translation for dual audio playback
+    context.bot_data[f"aud_src_{msg_id}"] = {
+        "text": text,
+        "voice_edge": src_info.get("edge"),
+        "gtts_code": src_info["gtts"],
+        "lang": src_lang
+    }
+    context.bot_data[f"aud_trg_{msg_id}"] = {
         "text": translation,
         "voice_edge": trg_info.get("edge"),
         "gtts_code": trg_info["gtts"],
@@ -430,23 +418,30 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     keyboard = [
-        [InlineKeyboardButton(f"🔊 Listen ({trg_info['flag']} {trg_lang})", callback_data=f"play_{msg_id}")]
+        [
+            InlineKeyboardButton(f"🔊 {src_info['flag']} Listen ({src_lang})", callback_data=f"play_src_{msg_id}"),
+            InlineKeyboardButton(f"🔊 {trg_info['flag']} Listen ({trg_lang})", callback_data=f"play_trg_{msg_id}")
+        ]
     ]
     if is_vip:
-        keyboard.append([InlineKeyboardButton("🐢 Slow-Mo Matrix (0.75x)", callback_data=f"slow_{msg_id}")])
+        keyboard.append([InlineKeyboardButton("🐢 Slow-Mo Matrix (0.75x)", callback_data=f"slow_trg_{msg_id}")])
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 9. Audio Playback Engine (`🔊 Listen`)
+# 9. Dual Audio Playback Engine (Source or Target)
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎧 Synthesizing HD Audio Stream...")
     data = query.data
 
-    is_slow = data.startswith("slow_")
-    msg_id = data.replace("slow_", "").replace("play_", "")
+    is_slow = "slow_" in data
+    if "src_" in data:
+        msg_id = data.replace("play_src_", "")
+        cache = context.bot_data.get(f"aud_src_{msg_id}")
+    else:
+        msg_id = data.replace("slow_trg_", "").replace("play_trg_", "")
+        cache = context.bot_data.get(f"aud_trg_{msg_id}")
 
-    cache = context.bot_data.get(f"aud_{msg_id}")
     if not cache:
         await query.answer("Audio session expired. Send a new message!", show_alert=True)
         return
@@ -457,8 +452,8 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rate_str = "-25%" if is_slow else "+0%"
 
     temp_audio_file = f"speech_{msg_id}.mp3"
-    speed_label = "Slow-Mo Matrix" if is_slow else "HD Native"
-    caption = f"🔊 <b>{speed_label} Audio Stream ({cache['lang']}):</b>\n<i>\"{text_to_speak}\"</i>"
+    speed_label = "Slow-Mo" if is_slow else "HD Native"
+    caption = f"🔊 <b>{speed_label} Audio ({cache['lang']}):</b>\n<i>\"{text_to_speak}\"</i>"
 
     try:
         worked = False
