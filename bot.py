@@ -125,7 +125,7 @@ def _sync_gemini_call(text, recent_languages=None, is_group=False):
             prompt = f"{system_instruction}\n\nMessage: \"{text}\""
 
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.6-flash',
             contents=prompt,
         )
         raw = response.text.strip()
@@ -211,7 +211,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "👤 <b>1. Personal Chat (Solo Tutor & Translator):</b>\n"
         "• Send any text in any language.\n"
-        "• Get dual audio buttons: Listen to both Source & Target languages!\n\n"
+        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons to listen to both Source & Target languages in natural human voices (Edge-TTS & gTTS)!\n\n"
         "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
         "• Add this bot to any group chat for instant multi-lingual shifting.\n\n"
         "<b>Commands:</b>\n"
