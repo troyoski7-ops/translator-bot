@@ -41,7 +41,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Verified Animations
+# 3. Themes
 STANDARD_THEMES = {
     "chibi": {"label": "🎀 Chibi Anime Girl", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
     "doge": {"label": "🐕 Thinking Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
@@ -87,7 +87,7 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Verified Active Groq Models Only
+# 5. Pure Dynamic Groq Translation Engine (Never hardcodes model names)
 def _sync_groq_call(text, target_hint, is_solo=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is missing in Render Environment Variables!"}
@@ -102,7 +102,7 @@ def _sync_groq_call(text, target_hint, is_solo=False):
         "2. If Target Requirement is provided and different, translate into it.\n"
         "3. In SOLO mode with no target:\n"
         "   - Malayalam -> English\n"
-        "   - English -> Malayalam (or Persian/German)\n"
+        "   - English -> Malayalam\n"
         "   - Any foreign language -> English\n"
         "4. In GROUP mode, translate to Partner's language.\n"
         "5. NEVER output template placeholders like '[SOURCE LANGUAGE]'.\n"
@@ -118,11 +118,19 @@ def _sync_groq_call(text, target_hint, is_solo=False):
 
     user_prompt = f"Message: \"{text}\"\nTarget Requirement: {target_hint or ('Auto-Solo' if is_solo else 'Auto-Group')}"
 
-    # Active production models on Groq
-    models_to_try = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant"
-    ]
+    # Query Groq account directly for currently available text chat models
+    try:
+        available_models = client.models.list()
+        # Filter out whisper (audio), guard, vision, and embedding models
+        chat_models = [
+            m.id for m in available_models.data
+            if not any(x in m.id.lower() for x in ["whisper", "guard", "vision", "embed", "safeguard"])
+        ]
+    except Exception as e:
+        chat_models = []
+
+    # If dynamic query succeeded, try available models; otherwise fallback to standard llama
+    models_to_try = chat_models if chat_models else ["llama-3.3-70b-versatile"]
 
     last_error_msg = ""
     for model_id in models_to_try:
@@ -225,7 +233,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎨 /theme • Change animation | 📊 /status • Check quota\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • Star VIP Store\n\n"
-        "Send any text or voice note to begin!"
+        "Send any text or voice note to begin chatting!"
     )
     try:
         await update.message.reply_animation(animation=active_theme["url"], caption=welcome, parse_mode="HTML")
@@ -398,7 +406,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card_text = (
         f"{vip_header}"
         f"👤 <b>{user_name}</b> ({mode_tag})\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
         f"📍 <i>{src_info['loc']} ⇄ {trg_info['loc']}</i>\n\n"
         f"<blockquote>{quote_symbol}{translation}</blockquote>"
         f"{native_block}"
