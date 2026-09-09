@@ -2,9 +2,12 @@ import os
 import re
 import io
 import asyncio
+import tempfile
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
+import edge_tts
+from pydub import AudioSegment
 from telegram import (
     Update,
     LabeledPrice,
@@ -61,23 +64,23 @@ VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
 # 4. Regional Voice Registry
 VOICE_MAP = {
-    "chinese": {"gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
-    "japanese": {"gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
-    "italian": {"gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
-    "german": {"gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
-    "persian": {"gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
-    "farsi": {"gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
-    "malayalam": {"gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
-    "russian": {"gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
-    "english": {"gtts": "en", "flag": "🇬🇧", "loc": "London"},
-    "tajik": {"gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
-    "azerbaijani": {"gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
-    "turkish": {"gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
-    "arabic": {"gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
-    "hindi": {"gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
-    "french": {"gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
-    "spanish": {"gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
-    "korean": {"gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
+    "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
+    "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
+    "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
+    "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
+    "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
+    "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
+    "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
+    "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
+    "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "loc": "London"},
+    "tajik": {"edge": "tg-TJ-GanjinaNeural", "gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
+    "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
+    "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
+    "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
+    "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
+    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
+    "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
+    "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
 }
 
 def get_voice_info(lang_name):
@@ -85,7 +88,7 @@ def get_voice_info(lang_name):
     for k, v in VOICE_MAP.items():
         if k in clean:
             return v
-    return {"gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
+    return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
 # 5. Dynamic Groq AI Engine
 def _sync_groq_call(text, partner_lang=None, is_group=False):
@@ -305,7 +308,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Fixed Voice Input Handler (Direct Bytearray Processing for Whisper)
+# 8. Foolproof Pydub-Converted Voice Handler
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
         return
@@ -321,22 +324,28 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not voice:
         return
 
-    status_msg = await update.message.reply_text("<i>Processing voice note... 🎙️</i>", parse_mode="HTML")
+    status_msg = await update.message.reply_text("<i>Processing voice note via FFmpeg... 🎙️</i>", parse_mode="HTML")
+    
+    input_file = tempfile.NamedTemporaryFile(delete=False, suffix=".oga").name
+    output_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
 
     try:
         tg_file = await context.bot.get_file(voice.file_id)
-        audio_bytes = await tg_file.download_as_bytearray()
+        await tg_file.download_to_drive(input_file)
 
-        if len(audio_bytes) < 100:
-            await status_msg.edit_text("⚠️ Voice recording too short or silent.")
-            return
+        # Convert Telegram OGA/OGG to standard MP3 using Pydub & FFmpeg
+        def _convert_and_transcribe():
+            audio = AudioSegment.from_file(input_file)
+            audio.export(output_file, format="mp3")
 
-        def _transcribe():
             client = Groq(api_key=GROQ_API_KEY)
+            with open(output_file, "rb") as f:
+                audio_bytes = f.read()
+
             for model_candidate in ["whisper-large-v3", "whisper-large-v3-turbo"]:
                 try:
                     res = client.audio.transcriptions.create(
-                        file=("audio.ogg", bytes(audio_bytes), "audio/ogg"),
+                        file=("audio.mp3", audio_bytes, "audio/mp3"),
                         model=model_candidate
                     )
                     if res and res.text:
@@ -345,16 +354,21 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     continue
             return ""
 
-        spoken_text = await asyncio.to_thread(_transcribe)
+        spoken_text = await asyncio.to_thread(_convert_and_transcribe)
         await status_msg.delete()
 
         if spoken_text:
             update.message.text = spoken_text
             await handle_text(update, context)
         else:
-            await update.message.reply_text("⚠️ Could not detect speech in the voice note. Please speak clearly!")
+            await update.message.reply_text("⚠️ Could not detect speech clearly in the voice note.")
     except Exception as e:
-        await status_msg.edit_text(f"⚠️ Voice Error: {str(e)[:60]}", parse_mode="HTML")
+        await status_msg.edit_text(f"⚠️ Voice Conversion Error: {str(e)[:60]}", parse_mode="HTML")
+    finally:
+        for path in [input_file, output_file]:
+            if os.path.exists(path):
+                try: os.remove(path)
+                except Exception: pass
 
 # 9. Dynamic Text Processing & Cross Bridge
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -442,6 +456,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg_id = placeholder.message_id
     context.bot_data[f"aud_{msg_id}"] = {
         "text": translation,
+        "voice_edge": trg_info.get("edge"),
         "gtts_code": trg_info["gtts"],
         "lang": trg_lang
     }
@@ -469,18 +484,30 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text_to_speak = cache["text"]
+    voice_edge = cache.get("voice_edge")
     gtts_code = cache.get("gtts_code", "en")
+    rate_str = "-25%" if is_slow else "+0%"
 
     temp_audio_file = f"speech_{msg_id}.mp3"
     speed_label = "Slowed" if is_slow else "Native"
     caption = f"🔊 <b>{speed_label} Pronunciation ({cache['lang']}):</b>\n<i>\"{text_to_speak}\"</i>"
 
     try:
-        def _generate():
-            tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
-            tts.save(temp_audio_file)
+        worked = False
+        if voice_edge:
+            try:
+                communicate = edge_tts.Communicate(text_to_speak, voice_edge, rate=rate_str)
+                await communicate.save(temp_audio_file)
+                if os.path.exists(temp_audio_file) and os.path.getsize(temp_audio_file) > 500:
+                    worked = True
+            except Exception:
+                worked = False
 
-        await asyncio.to_thread(_generate)
+        if not worked:
+            def _generate_gtts():
+                tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
+                tts.save(temp_audio_file)
+            await asyncio.to_thread(_generate_gtts)
 
         with open(temp_audio_file, "rb") as audio:
             await context.bot.send_audio(
