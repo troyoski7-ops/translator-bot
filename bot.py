@@ -22,11 +22,14 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-from google import genai
+import google.generativeai as genai
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 RAW_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_API_KEY = re.sub(r'\s+', '', RAW_GEMINI_KEY)
+
+# Configure old stable genai library
+genai.configure(api_key=GEMINI_API_KEY)
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -90,7 +93,6 @@ def _sync_gemini_call(text, recent_languages=None, is_group=False):
     if not GEMINI_API_KEY:
         return {"error": "GEMINI_API_KEY is not configured in Render!"}
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
     lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
 
     if is_group:
@@ -128,10 +130,8 @@ def _sync_gemini_call(text, recent_languages=None, is_group=False):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=prompt,
-            )
+            model = genai.GenerativeModel('gemini-2.0-flash')
+            response = model.generate_content(prompt)
             raw = response.text.strip()
             parsed = {}
             for line in raw.splitlines():
