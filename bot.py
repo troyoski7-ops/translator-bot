@@ -123,8 +123,8 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    # പൂർണ്ണമായും ഉറപ്പുള്ള ആക്ടീവ് മോഡൽ മാത്രം
-    models_to_try = ["llama-3.1-8b-instant"]
+    # പരിശോധിച്ചറിഞ്ഞ ഏറ്റവും പുതിയ ആക്ടീവ് മോഡൽ
+    models_to_try = ["llama-3.2-3b-preview"]
     last_error = ""
 
     for model_name in models_to_try:
