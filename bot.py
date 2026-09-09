@@ -26,7 +26,7 @@ from groq import Groq
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-# 2. Render Keep-Alive Web Server
+# 2. Render Keep-Alive Server
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
 
@@ -40,7 +40,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Verified Themes: 4 Free + 4 Luxury VIP Vault
+# 3. Themes: 4 Free + 4 Luxury VIP Vault
 STANDARD_THEMES = {
     "chibi": {"label": "🎀 Anime Girl", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
     "doge": {"label": "🐕 Smart Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
@@ -87,10 +87,10 @@ def get_voice_info(lang_name):
             return v
     return {"gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Dynamic Groq AI Engine (Live Model Discovery)
+# 5. Dynamic Groq AI Engine (Live Model Listing)
 def _sync_groq_call(text, partner_lang=None, is_group=False):
     if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY missing in Render Environment Variables!"}
+        return {"error": "GROQ_API_KEY is not configured in Render!"}
 
     client = Groq(api_key=GROQ_API_KEY)
 
@@ -98,16 +98,14 @@ def _sync_groq_call(text, partner_lang=None, is_group=False):
         system_instruction = (
             "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
             "Rules:\n"
-            "1. Accurately detect the source language of the input message.\n"
+            "1. Accurately detect the source language.\n"
             "2. If Partner Language is provided and different, translate directly into Partner Language.\n"
-            "3. If Partner Language is identical or not known:\n"
-            "   - Translate foreign language into English\n"
-            "   - If input is English, translate into partner's alternate language\n"
+            "3. If Partner Language is not known, translate foreign text to English and English to partner's alternate language.\n"
             "4. NEVER output raw template placeholders like '[SOURCE LANGUAGE]'.\n"
             "5. Output must strictly contain these 6 lines only:\n"
             "SRC: Source Language Name\n"
             "TRG: Target Language Name\n"
-            "TRANS: Translation in target language\n"
+            "TRANS: Translation text\n"
             "MEANING: English meaning\n"
             "NATIVE_P: Native script phonetic pronunciation helper\n"
             "LATIN_P: Latin English alphabet pronunciation helper"
@@ -115,23 +113,21 @@ def _sync_groq_call(text, partner_lang=None, is_group=False):
         user_prompt = f"Message: \"{text}\"\nPartner Language: {partner_lang or 'None'}"
     else:
         system_instruction = (
-            "You are a dedicated Personal Language Assistant and Pronunciation Tutor for a direct message chat.\n"
+            "You are a dedicated Personal Language Assistant and Tutor for a direct message chat.\n"
             "Rules:\n"
             "1. Accurately detect the source language.\n"
-            "2. If input is English, translate into the complementary target (Malayalam, German, Spanish, etc.).\n"
-            "3. If input is any regional or foreign language, translate directly into English.\n"
-            "4. NEVER output raw template placeholders like '[SOURCE LANGUAGE]'.\n"
-            "5. Output must strictly contain these 6 lines only:\n"
+            "2. If input is English, translate to Malayalam (or alternate language).\n"
+            "3. If input is foreign or regional (Malayalam, German, Russian, etc.), translate to English.\n"
+            "4. Output must strictly contain these 6 lines only:\n"
             "SRC: Source Language Name\n"
             "TRG: Target Language Name\n"
-            "TRANS: Translation in target language\n"
+            "TRANS: Translation text\n"
             "MEANING: English meaning\n"
             "NATIVE_P: Native script phonetic pronunciation helper\n"
             "LATIN_P: Latin English alphabet pronunciation helper"
         )
         user_prompt = f"Message: \"{text}\""
 
-    # Query active models dynamically from user's account
     models_to_try = []
     try:
         m_list = client.models.list()
@@ -142,13 +138,7 @@ def _sync_groq_call(text, partner_lang=None, is_group=False):
     except Exception:
         pass
 
-    standard_fallbacks = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "llama3-70b-8192",
-        "llama3-8b-8192",
-        "gemma2-9b-it"
-    ]
+    standard_fallbacks = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"]
     for fb in standard_fallbacks:
         if fb not in models_to_try:
             models_to_try.append(fb)
@@ -232,7 +222,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start Command with Universal Guidance
+# 7. Start Command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -252,7 +242,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👥 <b>2. In Group Chat (100% Automatic Live Interpreter):</b>\n"
         "• Add this bot to any group chat!\n"
         "• When members chat in different languages (e.g. English ⇄ Russian, Malayalam ⇄ Persian, German ⇄ Italian), the bot <b>automatically cross-translates</b> without any manual reset.\n\n"
-        "🎙 <b>Voice Input:</b> Speak freely! Just hold the mic button and send a voice note.\n\n"
+        "🎙 <b>Voice Input:</b> Hold the mic button and send a voice note.\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Change start animation\n"
         "📊 /status • Check quota & VIP status\n"
@@ -315,7 +305,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Handling Incoming Voice Notes (Whisper AI Input Fix)
+# 8. Fixed Whisper Voice Input Handler (Direct In-Memory Processing)
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
         return
@@ -332,23 +322,29 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     status_msg = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
-    temp_input = f"voice_{voice.file_id}.ogg"
 
     try:
+        # Download straight into memory
         tg_file = await context.bot.get_file(voice.file_id)
-        await tg_file.download_to_drive(temp_input)
+        buf = io.BytesIO()
+        await tg_file.download_to_memory(buf)
+        buf.seek(0)
+        audio_bytes = buf.read()
+
+        if len(audio_bytes) < 150:
+            await status_msg.edit_text("⚠️ Voice recording too short. Please speak again!")
+            return
 
         def _transcribe():
             client = Groq(api_key=GROQ_API_KEY)
-            for w_model in ["whisper-large-v3", "whisper-large-v3-turbo"]:
+            for model_candidate in ["whisper-large-v3", "whisper-large-v3-turbo"]:
                 try:
-                    with open(temp_input, "rb") as f:
-                        res = client.audio.transcriptions.create(
-                            file=("voice.ogg", f.read(), "audio/ogg"),
-                            model=w_model
-                        )
-                        if res.text:
-                            return res.text.strip()
+                    res = client.audio.transcriptions.create(
+                        file=("voice.ogg", audio_bytes, "audio/ogg"),
+                        model=model_candidate
+                    )
+                    if res and res.text:
+                        return res.text.strip()
                 except Exception:
                     continue
             return ""
@@ -360,13 +356,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update.message.text = spoken_text
             await handle_text(update, context)
         else:
-            await update.message.reply_text("⚠️ Could not recognize speech clearly. Please speak again!")
+            await update.message.reply_text("⚠️ Could not hear audio clearly. Please try speaking closer to the mic.")
     except Exception as e:
-        await status_msg.edit_text(f"⚠️ Voice Error: {str(e)[:60]}", parse_mode="HTML")
-    finally:
-        if os.path.exists(temp_input):
-            try: os.remove(temp_input)
-            except Exception: pass
+        await status_msg.edit_text(f"⚠️ Voice Transcription Error: {str(e)[:60]}", parse_mode="HTML")
 
 # 9. Dynamic Text Processing & Cross Bridge
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -466,10 +458,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 10. Guaranteed Complete Audio Delivery (Fixed 00:01 Bug Permanently)
+# 10. Reliable Working Audio Delivery
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🎙️ Generating native speech...")
+    await query.answer("🎙️ Generating audio...")
     data = query.data
 
     is_slow = data.startswith("slow_")
@@ -482,7 +474,10 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text_to_speak = cache["text"]
     gtts_code = cache.get("gtts_code", "en")
+
     temp_audio_file = f"speech_{msg_id}.mp3"
+    speed_label = "Slowed" if is_slow else "Native"
+    caption = f"🔊 <b>{speed_label} Pronunciation ({cache['lang']}):</b>\n<i>\"{text_to_speak}\"</i>"
 
     try:
         def _generate():
@@ -490,9 +485,6 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tts.save(temp_audio_file)
 
         await asyncio.to_thread(_generate)
-
-        speed_label = "Slowed" if is_slow else "Native"
-        caption = f"🔊 <i>{speed_label} ({cache['lang']}): \"{text_to_speak[:45]}\"</i>"
 
         with open(temp_audio_file, "rb") as audio:
             await context.bot.send_audio(
@@ -507,7 +499,7 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"⚠️ Audio error: {str(e)[:60]}"
+            text=f"⚠️ Audio playback error: {str(e)[:60]}"
         )
     finally:
         if os.path.exists(temp_audio_file):
