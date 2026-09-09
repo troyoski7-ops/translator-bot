@@ -23,11 +23,9 @@ from telegram.ext import (
 )
 from groq import Groq
 
-# 1. Credentials
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-# 2. Render Keep-Alive Server
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
 
@@ -41,7 +39,6 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Themes: 4 Free + 4 Luxury VIP Vault
 STANDARD_THEMES = {
     "chibi": {"label": "🎀 Anime Girl", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
     "doge": {"label": "🐕 Smart Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
@@ -60,7 +57,6 @@ ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
 ANIM_STORE_URL = "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
-# 4. Regional Voice Registry
 VOICE_MAP = {
     "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
     "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
@@ -88,10 +84,9 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Direct Error-Free Engine (Using Gemma 2 exclusively)
 def _sync_groq_call(text, recent_languages=None, is_group=False):
     if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY is not configured in Render Environment Variables!"}
+        return {"error": "GROQ_API_KEY is not configured in Render!"}
 
     client = Groq(api_key=GROQ_API_KEY)
     lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
@@ -159,7 +154,6 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
 
-# 6. Quota & VIP Logic
 FREE_LIMIT = 100
 PLANS = {
     "sub_1m": {"name": "1 Month VIP", "days": 30, "stars": 50, "badge": "⭐️ VIP"},
@@ -204,7 +198,6 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start Command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -314,7 +307,6 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Unified Handler with Dual Audio Support (Source & Target)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
         return
@@ -426,7 +418,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 9. Dual Audio Playback Engine
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎧 Synthesizing HD Audio Stream...")
@@ -490,7 +481,6 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try: os.remove(temp_audio_file)
             except Exception: pass
 
-# 10. Star Payments
 async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -533,7 +523,6 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     except Exception:
         await update.message.reply_text(gift_text, parse_mode="HTML")
 
-# 11. Run Engine
 async def main():
     await start_web_server()
 
@@ -562,7 +551,8 @@ async def main():
         pass
         
     await app.start()
-    app.updater.start_polling(drop_pending_updates=True)
+    # FIXED: Added await here so polling starts correctly without warnings
+    await app.updater.start_polling(drop_pending_updates=True)
 
     stop_event = asyncio.Event()
     await stop_event.wait()
