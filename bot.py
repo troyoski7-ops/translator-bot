@@ -88,7 +88,7 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Stable Groq Engine (Using verified stable model)
+# 5. Auto-Detect Groq Engine (No Model Not Found Errors)
 def _sync_groq_call(text, recent_languages=None, is_group=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is not configured in Render!"}
@@ -102,7 +102,7 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
             "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
             f"{lang_context}\n"
             "Rules:\n"
-            "1. Accurately detect the current message's source language on the fly.\n"
+            "1. Accurately detect source language on the fly.\n"
             "2. Adapt instantly to language shifts and cross-translate.\n"
             "3. Output MUST strictly contain these 6 lines with exact prefixes:\n"
             "SRC: [Detected Source Language Name]\n"
@@ -129,33 +129,52 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
+    # Automatically fetch active models available for this API key
+    models_to_try = []
     try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=400,
-        )
-        raw = completion.choices[0].message.content.strip()
-        parsed = {}
-        for line in raw.splitlines():
-            line = line.strip()
-            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-            elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-            elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+        m_list = client.models.list()
+        for m in m_list.data:
+            mid = m.id.lower()
+            if "whisper" not in mid and "guard" not in mid and "embed" not in mid:
+                models_to_try.append(m.id)
+    except Exception:
+        pass
 
-        if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
-            return parsed
-        else:
-            return {"error": "Groq returned invalid format."}
-    except Exception as e:
-        return {"error": f"Groq Error: {str(e)}"}
+    # Reliable fallback models list
+    for fallback in ["llama-3.3-70b-versatile", "llama3-70b-8192", "llama-3.1-8b-instant", "gemma2-9b-it"]:
+        if fallback not in models_to_try:
+            models_to_try.append(fallback)
+
+    last_error_msg = ""
+    for model_id in models_to_try:
+        try:
+            completion = client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=400,
+            )
+            raw = completion.choices[0].message.content.strip()
+            parsed = {}
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+
+            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
+                return parsed
+        except Exception as e:
+            last_error_msg = str(e)
+            continue
+
+    return {"error": f"Groq Error: {last_error_msg}"}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
