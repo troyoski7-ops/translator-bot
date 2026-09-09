@@ -25,8 +25,8 @@ from telegram.ext import (
 from google import genai
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-# താങ്കൾ നൽകിയ കീ ഇവിടെ ഡയറക്റ്റ് ആയി ചേർത്തിരിക്കുന്നു
-GEMINI_API_KEY = "AQ.Ab8RN6LaOxKhnSuiVOe1SKYVgLMBDn2E9uSi9SSPKZl3w5V4Wg"
+RAW_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = re.sub(r'\s+', '', RAW_GEMINI_KEY)
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -87,6 +87,9 @@ def get_voice_info(lang_name):
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
 def _sync_gemini_call(text, recent_languages=None, is_group=False):
+    if not GEMINI_API_KEY:
+        return {"error": "GEMINI_API_KEY is not configured in Render!"}
+
     client = genai.Client(api_key=GEMINI_API_KEY)
     lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
 
@@ -125,8 +128,9 @@ def _sync_gemini_call(text, recent_languages=None, is_group=False):
     max_retries = 3
     for attempt in range(max_retries):
         try:
+            # Using 'gemini-1.5-flash' which is universally available and stable
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-1.5-flash',
                 contents=prompt,
             )
             raw = response.text.strip()
