@@ -88,7 +88,7 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Bulletproof Error-Free Groq Engine
+# 5. Direct Error-Free Engine (Using Gemma 2 exclusively)
 def _sync_groq_call(text, recent_languages=None, is_group=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is not configured in Render Environment Variables!"}
@@ -128,46 +128,33 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    models_to_try = ["gemma2-9b-it", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
     try:
-        m_list = client.models.list()
-        for m in m_list.data:
-            mid = m.id.lower()
-            if not any(bad in mid for bad in ["whisper", "guard", "embed", "vision", "audio"]) and m.id not in models_to_try:
-                models_to_try.insert(0, m.id)
-    except Exception:
-        pass
+        completion = client.chat.completions.create(
+            model="gemma2-9b-it",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=400,
+        )
+        raw = completion.choices[0].message.content.strip()
+        parsed = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+            elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+            elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
 
-    last_error_msg = ""
-    for model_id in models_to_try:
-        try:
-            completion = client.chat.completions.create(
-                model=model_id,
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.1,
-                max_tokens=400,
-            )
-            raw = completion.choices[0].message.content.strip()
-            parsed = {}
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
-
-            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
-                return parsed
-        except Exception as e:
-            last_error_msg = str(e)
-            continue
-
-    return {"error": f"Groq Error: {last_error_msg}"}
+        if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
+            return parsed
+        else:
+            return {"error": "Groq returned invalid format."}
+    except Exception as e:
+        return {"error": f"Groq Error: {str(e)}"}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
@@ -537,7 +524,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     base_time = datetime.fromisoformat(current_expiry_str) if current_expiry_str and datetime.fromisoformat(current_expiry_str) > now else now
 
     new_expiry = base_time + timedelta(days=plan["days"])
-    context.post_expiry = context.chat_data["premium_expiry"][user_id] = new_expiry.isoformat()
+    context.chat_data["premium_expiry"][user_id] = new_expiry.isoformat()
     context.chat_data["vip_tier"][user_id] = plan["badge"]
 
     gift_text = f"🎁 <b>VIP HOLOGRAPHIC PASS UNLOCKED!</b> ⭐️\n\n👑 <b>Tier:</b> {plan['name']}\n💎 <b>Badge:</b> {plan['badge']}"
@@ -577,7 +564,7 @@ async def main():
     await app.start()
     app.updater.start_polling(drop_pending_updates=True)
 
-    stop_event = async_event = asyncio.Event()
+    stop_event = asyncio.Event()
     await stop_event.wait()
 
 if __name__ == "__main__":
