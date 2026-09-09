@@ -88,62 +88,49 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Dynamic Groq AI Engine
-def _sync_groq_call(text, partner_lang=None, is_group=False):
+# 5. Dynamic Groq AI Engine with Instant Language Shift Detection
+def _sync_groq_call(text, recent_languages=None, is_group=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is not configured in Render!"}
 
     client = Groq(api_key=GROQ_API_KEY)
 
+    lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
+
     if is_group:
         system_instruction = (
             "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
+            f"{lang_context}\n"
             "Rules:\n"
-            "1. Accurately detect the source language.\n"
-            "2. If Partner Language is provided and different, translate directly into Partner Language.\n"
-            "3. If Partner Language is not known, translate foreign text to English and English to partner's alternate language.\n"
-            "4. NEVER output raw template placeholders.\n"
-            "5. Output must strictly contain these 6 lines only:\n"
-            "SRC: Source Language Name\n"
-            "TRG: Target Language Name\n"
-            "TRANS: Translation text\n"
-            "MEANING: English meaning\n"
-            "NATIVE_P: Native script phonetic pronunciation helper\n"
-            "LATIN_P: Latin English alphabet pronunciation helper"
+            "1. Accurately detect the current message's source language on the fly (it may change dynamically).\n"
+            "2. If users change languages abruptly, adapt instantly and cross-translate to the alternate active language in the conversation.\n"
+            "3. Output MUST strictly contain these 6 lines with exact prefixes:\n"
+            "SRC: [Detected Source Language Name]\n"
+            "TRG: [Target Language Name]\n"
+            "TRANS: [Translated Text]\n"
+            "MEANING: [English meaning]\n"
+            "NATIVE_P: [Phonetic in native script]\n"
+            "LATIN_P: [Phonetic in English Latin alphabet]"
         )
-        user_prompt = f"Message: \"{text}\"\nPartner Language: {partner_lang or 'None'}"
+        user_prompt = f"Group Message: \"{text}\""
     else:
         system_instruction = (
-            "You are a dedicated Personal Language Assistant and Tutor for a direct message chat.\n"
+            "You are a dedicated Personal Language Assistant and Tutor.\n"
             "Rules:\n"
-            "1. Accurately detect the source language.\n"
-            "2. If input is English, translate to Malayalam (or alternate language).\n"
-            "3. If input is foreign or regional (Malayalam, German, Russian, etc.), translate to English.\n"
-            "4. Output must strictly contain these 6 lines only:\n"
-            "SRC: Source Language Name\n"
-            "TRG: Target Language Name\n"
-            "TRANS: Translation text\n"
-            "MEANING: English meaning\n"
-            "NATIVE_P: Native script phonetic pronunciation helper\n"
-            "LATIN_P: Latin English alphabet pronunciation helper"
+            "1. Detect source language accurately.\n"
+            "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
+            "3. Output MUST strictly contain these 6 lines with exact prefixes:\n"
+            "SRC: [Source Language Name]\n"
+            "TRG: [Target Language Name]\n"
+            "TRANS: [Translated Text]\n"
+            "MEANING: [English meaning]\n"
+            "NATIVE_P: [Phonetic in native script]\n"
+            "LATIN_P: [Phonetic in English Latin alphabet]"
         )
         user_prompt = f"Message: \"{text}\""
 
-    models_to_try = []
-    try:
-        m_list = client.models.list()
-        for m in m_list.data:
-            mid = m.id.lower()
-            if not any(bad in mid for bad in ["whisper", "guard", "vision", "embed", "safeguard", "distil"]):
-                models_to_try.append(m.id)
-    except Exception:
-        pass
-
-    standard_fallbacks = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"]
-    for fb in standard_fallbacks:
-        if fb not in models_to_try:
-            models_to_try.append(fb)
-
+    models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"]
+    
     last_error_msg = ""
     for model_id in models_to_try:
         try:
@@ -167,7 +154,7 @@ def _sync_groq_call(text, partner_lang=None, is_group=False):
                 elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
                 elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
 
-            if parsed.get("trans") and "[" not in parsed.get("trans", ""):
+            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
                 return parsed
         except Exception as e:
             last_error_msg = str(e)
@@ -175,8 +162,8 @@ def _sync_groq_call(text, partner_lang=None, is_group=False):
 
     return {"error": f"Groq Error: {last_error_msg}"}
 
-async def execute_translation(text, partner_lang=None, is_group=False):
-    return await asyncio.to_thread(_sync_groq_call, text, partner_lang, is_group)
+async def execute_translation(text, recent_languages=None, is_group=False):
+    return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
 
 # 6. Quota & VIP Logic
 FREE_LIMIT = 100
@@ -223,7 +210,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start Command (Text-Only Input Support)
+# 7. Start Command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -245,7 +232,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Get instant meanings, dynamic card UI, dual phonetics, and native HD audio (`🔊 Listen`).\n\n"
         "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
         "• Add this bot to any group chat!\n"
-        "• Cross-translates multi-lingual text conversations on the fly.\n\n"
+        "• Instantly detects sudden language shifts between members on the fly.\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Holographic UI Theme\n"
         "🖼 /custombg [URL] • Set Custom VIP Background GIF\n"
@@ -334,9 +321,12 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Text-Only Input & Translation Handler
+# 8. Unified Handler with Dynamic Group Language Shift Tracker
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
+        return
+
+    if not update.message or not update.message.text:
         return
 
     user = update.effective_user
@@ -354,31 +344,29 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_type = update.effective_chat.type
     is_group = chat_type in ["group", "supergroup"]
 
-    if "user_langs" not in context.chat_data:
-        context.chat_data["user_langs"] = {}
+    if "group_lang_memory" not in context.chat_data:
+        context.chat_data["group_lang_memory"] = []
 
-    user_langs = context.chat_data["user_langs"]
+    recent_langs = context.chat_data["group_lang_memory"]
 
-    if is_group:
-        other_users = [uid for uid in user_langs if uid != user_id]
-        partner_target = user_langs[other_users[-1]] if other_users else None
-    else:
-        partner_target = None
-
-    res = await execute_translation(text, partner_target, is_group=is_group)
+    res = await execute_translation(text, recent_languages=recent_langs, is_group=is_group)
 
     if "error" in res:
         await placeholder.edit_text(f"⚠️ <b>Neural Error:</b> {res['error']}", parse_mode="HTML")
         return
 
-    src_lang = res.get("src", "Detected")
-    trg_lang = res.get("trg", "Target")
+    src_lang = res.get("src", "Auto")
+    trg_lang = res.get("trg", "English")
     translation = res.get("trans", text)
     meaning_en = res.get("meaning", text)
     native_p = res.get("native_p", "")
     latin_p = res.get("latin_p", "")
 
-    user_langs[user_id] = src_lang
+    # Automatically track language shifts for group continuity
+    if src_lang not in recent_langs:
+        recent_langs.append(src_lang)
+        if len(recent_langs) > 4:  # Keep only the 4 most recent active languages
+            recent_langs.pop(0)
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
@@ -399,9 +387,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quote_symbol = "💬 "
         status_line = f"🔋 Quota: {status_val}"
 
-    native_block = f"🗣 <i>Phonetic Script ({trg_lang}):</i>\n<code>{native_p}</code>\n" if native_p else ""
-    latin_block = f"🔤 <i>Phonetic Alphabet:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
-    meaning_block = f"📖 <i>Contextual Meaning:</i> <b>{meaning_en}</b>\n" if meaning_en else ""
+    native_block = f"🗣 <i>Phonetic ({trg_lang}):</i>\n<code>{native_p}</code>\n" if native_p else ""
+    latin_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
+    meaning_block = f"📖 <i>Meaning (EN):</i> <b>{meaning_en}</b>\n" if meaning_en else ""
 
     mode_label = "🌐 Group Live Neural Bridge" if is_group else "💠 Personal Neural Tutor"
 
@@ -409,7 +397,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_header}"
         f"👤 <b>{user_name}</b> ➔ <i>{mode_label}</i>\n"
         f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code>  <b>⚡ SYNC ⚡</b>  {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code>  <b>⚡ SHIFT SYNC ⚡</b>  {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
         f"📍 <i>{src_info['loc']}</i> ⟷ <i>{trg_info['loc']}</i>\n"
         f"────────────────────────\n\n"
         f"<blockquote>{quote_symbol}<b>{translation}</b></blockquote>\n\n"
@@ -436,7 +424,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 9. Audio Pronunciation Playback (`🔊 Listen`)
+# 9. Audio Playback Engine (`🔊 Listen`)
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎧 Synthesizing HD Audio Stream...")
