@@ -1,6 +1,7 @@
 import os
 import re
 import io
+import time
 import asyncio
 from datetime import datetime, timedelta
 from aiohttp import web
@@ -23,8 +24,9 @@ from telegram.ext import (
 )
 from google import genai
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+RAW_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_KEY = re.sub(r'\s+', '', RAW_GEMINI_KEY)
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -123,28 +125,34 @@ def _sync_gemini_call(text, recent_languages=None, is_group=False):
         )
         prompt = f"{system_instruction}\n\nMessage: \"{text}\""
 
-    try:
-        response = client.models.generate_content(
-            model='gemini-3.6-flash',
-            contents=prompt,
-        )
-        raw = response.text.strip()
-        parsed = {}
-        for line in raw.splitlines():
-            line = line.strip()
-            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-            elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-            elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+            )
+            raw = response.text.strip()
+            parsed = {}
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
 
-        if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
-            return parsed
-        else:
-            return {"error": "Gemini returned invalid format."}
-    except Exception as e:
-        return {"error": f"Gemini Error: {str(e)}"}
+            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
+                return parsed
+        except Exception as e:
+            err_str = str(e)
+            if "503" in err_str or "unavailable" in err_str.lower():
+                time.sleep(1.5)
+                continue
+            return {"error": f"Gemini Error: {err_str[:60]}"}
+
+    return {"error": "Gemini Server Busy."}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_gemini_call, text, recent_languages, is_group)
