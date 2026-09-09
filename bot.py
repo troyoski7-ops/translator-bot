@@ -72,7 +72,7 @@ VOICE_MAP = {
     "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
     "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
     "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
-    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
+    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "label": "🇫🇷", "loc": "Paris"},
     "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
     "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
 }
@@ -123,11 +123,9 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    # ഓട്ടോ-ഫോൾബാക്ക് സംവിധാനം (ഏതെങ്കിലും ഒന്ന് വർക്ക് ആയിക്കോളും)
+    # നിലവിൽ ലഭ്യമായ ഏറ്റവും പുതിയ Llama 3 മോഡൽ
     models_to_try = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "deepseek-r1-distill-llama-70b"
+        "llama-3.1-8b-instant"
     ]
     last_error = ""
 
