@@ -23,13 +23,13 @@ from telegram.ext import (
 )
 from groq import Groq
 
-# 1. Credentials & Configuration
+# 1. Credentials
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-# 2. Render Keep-Alive Web Server
+# 2. Render Keep-Alive Server
 async def handle_ping(request):
-    return web.Response(text="Translator Bridge Core Online & Flawless!")
+    return web.Response(text="Universal Polyglot Bridge Live & Dual-Mode Active!")
 
 async def start_web_server():
     app = web.Application()
@@ -41,7 +41,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Verified Themes: 4 Free + VIP Luxury Vault
+# 3. Themes: 4 Free + VIP Luxury Vault
 STANDARD_THEMES = {
     "chibi": {"label": "🎀 Chibi Anime Girl", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
     "doge": {"label": "🐕 Thinking Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
@@ -60,12 +60,16 @@ ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
 ANIM_STORE_URL = "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
-# 4. Regional Voice Registry
+# 4. Regional Voice & Country Flag Registry
 VOICE_MAP = {
+    "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
+    "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
+    "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
+    "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
     "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
     "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
     "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
-    "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
+    "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
     "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "loc": "London"},
     "tajik": {"edge": "tg-TJ-GanjinaNeural", "gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
     "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
@@ -73,12 +77,11 @@ VOICE_MAP = {
     "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
     "uzbek": {"edge": "uz-UZ-MadinaNeural", "gtts": "uz", "flag": "🇺🇿", "loc": "Tashkent"},
     "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "loc": "Astana"},
-    "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
     "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
     "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
     "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
     "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
-    "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
+    "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
 }
 
 def get_voice_info(lang_name):
@@ -88,49 +91,40 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Dynamic AI Translation Engine (No Model 404 Failures)
-def _sync_groq_call(text, target_hint):
+# 5. Dynamic Dual-Mode Translation Engine (Group vs Solo DM)
+def _sync_groq_call(text, target_hint, is_solo=False):
     if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY missing! Set it in Render Environment Variables."}
+        return {"error": "GROQ_API_KEY missing! Configure it in Render Environment Variables."}
 
     client = Groq(api_key=GROQ_API_KEY)
 
     system_instruction = (
-        "You are an expert bilingual live dialogue interpreter.\n"
-        "Strict Translation Rules:\n"
-        "1. Identify the source language.\n"
-        "2. If input is Malayalam or English, target is Persian (unless partner language is specified).\n"
-        "3. If input is Persian/Tajik, target is Malayalam.\n"
-        "4. If target_hint is specified and different from source, translate into target_hint.\n"
-        "5. NEVER return the original text! You MUST translate the authentic meaning.\n"
-        "6. Always provide English Meaning, Target Script Phonetics, and Latin English Transliteration.\n\n"
+        "You are an infallible universal language translator and pronunciation tutor.\n"
+        f"Mode: {'SOLO PERSONAL ASSISTANT' if is_solo else 'GROUP LIVE DIALOGUE INTERPRETER'}\n\n"
+        "Translation Rules:\n"
+        "1. Detect the source language of the input text accurately.\n"
+        "2. If Target Requirement is provided and different from source, translate into it.\n"
+        "3. If in SOLO mode and no target specified:\n"
+        "   - If input is Malayalam -> Target is English\n"
+        "   - If input is English -> Target is Malayalam (or Persian/German)\n"
+        "   - If input is foreign (German, Italian, Russian, Chinese, Persian, etc.) -> Target is English\n"
+        "4. If in GROUP mode and partner language is provided, translate into Partner's language.\n"
+        "5. NEVER output template brackets like '[SOURCE LANGUAGE]'. Output authentic translations only.\n"
+        "6. Provide English Meaning, Native Script Phonetics, and Latin English Transliteration.\n\n"
         "Strictly output these 6 lines only:\n"
-        "SRC: [Source Language]\n"
-        "TRG: [Target Language]\n"
-        "TRANS: [Translated Sentence]\n"
-        "MEANING: [English meaning]\n"
-        "NATIVE_P: [Phonetic reading in target script]\n"
-        "LATIN_P: [English letter transliteration]"
+        "SRC: Source Language Name\n"
+        "TRG: Target Language Name\n"
+        "TRANS: Full translation in target language\n"
+        "MEANING: Clear English meaning of sentence\n"
+        "NATIVE_P: Native script phonetic pronunciation helper (e.g. Pinyin for Chinese, Kana for Japanese)\n"
+        "LATIN_P: Latin English alphabet pronunciation helper (e.g. Romaji for Japanese)"
     )
 
-    user_prompt = f"Text: \"{text}\"\nTarget Requirement: {target_hint or 'Auto-Detect'}"
+    user_prompt = f"Message: \"{text}\"\nTarget Requirement: {target_hint or ('Auto-Solo' if is_solo else 'Auto-Group')}"
 
-    # Auto-fetch working models dynamically from Groq account
-    active_models = []
-    try:
-        model_list = client.models.list()
-        active_models = [
-            m.id for m in model_list.data
-            if not any(x in m.id.lower() for x in ["whisper", "guard", "vision", "embed", "safeguard"])
-        ]
-    except Exception:
-        active_models = ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]
+    models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
 
-    if not active_models:
-        active_models = ["llama-3.3-70b-versatile"]
-
-    last_err = ""
-    for model_id in active_models:
+    for model_id in models_to_try:
         try:
             completion = client.chat.completions.create(
                 model=model_id,
@@ -152,18 +146,17 @@ def _sync_groq_call(text, target_hint):
                 elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
                 elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
 
-            if parsed.get("trans"):
+            if parsed.get("trans") and "[" not in parsed.get("trans", ""):
                 return parsed
-        except Exception as e:
-            last_err = str(e)
+        except Exception:
             continue
 
-    return {"error": last_err or "Translation failed."}
+    return {"error": "Translation engine unreachable."}
 
-async def execute_translation(text, target_hint=None):
-    return await asyncio.to_thread(_sync_groq_call, text, target_hint)
+async def execute_translation(text, target_hint=None, is_solo=False):
+    return await asyncio.to_thread(_sync_groq_call, text, target_hint, is_solo)
 
-# 6. Quota & VIP Logic
+# 6. Quotas & Subscriptions
 FREE_LIMIT = 100
 PLANS = {
     "sub_1m": {"name": "1 Month VIP", "days": 30, "stars": 50, "badge": "⭐️ VIP"},
@@ -191,7 +184,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⭐️ <b>STAR VIP STORE & VAULT</b> ⭐️\n\n"
         "Free translation quota exhausted!\n\n"
-        "• Unlimited 2-Way Translations\n"
+        "• Unlimited 2-Way Group & Solo Translations\n"
         "• Dual Voice Audio with 0.75x Slow-Motion\n"
         "• Secret VIP Luxury Themes\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
@@ -208,7 +201,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start in 100% English
+# 7. Start in Clean English
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -219,16 +212,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vip_badge = "👑 <b>VIP PRIVILEGES ACTIVE</b>\n" if is_vip else ""
 
     welcome = (
-        f"🌐 <b>SMART 2-WAY DIALOGUE INTERPRETER</b>\n"
+        f"🌐 <b>SMART UNIVERSAL TRANSLATOR & TUTOR</b>\n"
         f"{vip_badge}\n"
-        "• ⚡ <b>100% Automatic</b>: Locks languages dynamically for all chat partners.\n"
-        "• 🎙 <b>Voice Input Enabled</b>: Speak or type in any language!\n"
-        "• 🔄 <b>Cross Translation</b>: Seamless bidirectional live conversation.\n"
-        "• 🗣 <b>Dual Phonetics</b>: Native script phonetics & English Latin transliteration.\n"
-        "• 🔊 <b>Single Target Audio</b>: Listen to the translated native pronunciation.\n\n"
+        "• 👥 <b>Group Mode</b>: Live 2-way cross translation between any two users.\n"
+        "• 👤 <b>Solo Mode</b>: Personal language tutor (study German, Persian, Italian, Chinese, etc.).\n"
+        "• 🎙 <b>Voice Input</b>: Tap the mic and talk in any language!\n"
+        "• 🗣 <b>Dual Phonetics</b>: Native script and English transliteration.\n"
+        "• 🔊 <b>Tap to Listen</b>: Crystal-clear native audio playback.\n\n"
         "<b>Commands:</b>\n"
-        "🎨 /theme • Change start animation\n"
-        "📊 /status • Check quota & VIP status\n"
+        "🎨 /theme • Change animation | 📊 /status • Check quota\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • Star VIP Store\n\n"
         "Send any text or voice note to begin!"
@@ -288,7 +280,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Handling Incoming Voice Notes (Whisper AI Transcription)
+# 8. Handling Incoming Voice Notes (Whisper AI)
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
         return
@@ -304,33 +296,33 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not voice:
         return
 
-    placeholder = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
-
+    status_msg = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
     file = await context.bot.get_file(voice.file_id)
-    temp_path = f"temp_{voice.file_id}.ogg"
-    await file.download_to_drive(temp_path)
+
+    buf = io.BytesIO()
+    await file.download_to_memory(buf)
+    buf.seek(0)
+    file_bytes = buf.read()
+
+    def _transcribe():
+        client = Groq(api_key=GROQ_API_KEY)
+        return client.audio.transcriptions.create(
+            file=("voice.ogg", file_bytes),
+            model="whisper-large-v3"
+        ).text.strip()
 
     try:
-        def _transcribe():
-            client = Groq(api_key=GROQ_API_KEY)
-            with open(temp_path, "rb") as audio_file:
-                return client.audio.transcriptions.create(
-                    file=(temp_path, audio_file.read()),
-                    model="whisper-large-v3"
-                ).text.strip()
-
         spoken_text = await asyncio.to_thread(_transcribe)
-        await placeholder.delete()
-        update.message.text = spoken_text
-        await handle_text(update, context)
-
+        await status_msg.delete()
+        if spoken_text:
+            update.message.text = spoken_text
+            await handle_text(update, context)
+        else:
+            await update.message.reply_text("⚠️ Could not hear audio clearly.")
     except Exception as e:
-        await placeholder.edit_text(f"⚠️ <b>Voice Processing Error:</b> {str(e)[:80]}", parse_mode="HTML")
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
+        await status_msg.edit_text(f"⚠️ Voice Error: {str(e)[:60]}", parse_mode="HTML")
 
-# 9. Dynamic Multi-User Cross-Language Routing (Text Messages)
+# 9. Dynamic Text Processing & Cross Bridge (Group + Solo DM)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
         return
@@ -347,47 +339,37 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     placeholder = await update.message.reply_text("<i>Translating... 🏃</i>", parse_mode="HTML")
 
-    # Multi-User Language Memory Registry
+    # Check if this is a Solo Private Chat or a Group Chat
+    chat_type = update.effective_chat.type
+    is_solo = chat_type == "private"
+
     if "user_langs" not in context.chat_data:
         context.chat_data["user_langs"] = {}
 
     user_langs = context.chat_data["user_langs"]
 
-    # Identify partner's language (the most recent speaker who isn't this user)
-    other_users = [uid for uid in user_langs if uid != user_id]
-    partner_lang = user_langs[other_users[-1]] if other_users else None
+    # In groups: Partner is the most recent other speaker
+    if not is_solo:
+        other_users = [uid for uid in user_langs if uid != user_id]
+        partner_target = user_langs[other_users[-1]] if other_users else None
+    else:
+        # In solo mode: No fixed partner, dynamic auto tutor routing
+        partner_target = None
 
-    is_malayalam = bool(re.search(r'[\u0D00-\u0D7F]', text))
-    target_request = partner_lang or ("Persian" if is_malayalam else "Malayalam")
-
-    # Call AI with dynamic model discovery
-    res = await execute_translation(text, target_request)
+    res = await execute_translation(text, partner_target, is_solo=is_solo)
 
     if "error" in res:
-        await placeholder.edit_text(
-            f"⚠️ <b>Engine Notice:</b> {res['error']}\n\n<i>Please ensure GROQ_API_KEY is configured in Render!</i>",
-            parse_mode="HTML"
-        )
+        await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
-    src_lang = res.get("src", "Malayalam" if is_malayalam else "Detected")
-    trg_lang = res.get("trg", target_request)
+    src_lang = res.get("src", "Detected")
+    trg_lang = res.get("trg", "Target")
     translation = res.get("trans", text)
     meaning_en = res.get("meaning", text)
     native_p = res.get("native_p", "")
     latin_p = res.get("latin_p", "")
 
-    # Safety Guard: Ensure source and target are not identical
-    if src_lang.lower() == trg_lang.lower():
-        trg_lang = "Malayalam" if "persian" in src_lang.lower() else "Persian"
-        second_res = await execute_translation(text, trg_lang)
-        if "trans" in second_res:
-            translation = second_res.get("trans", translation)
-            meaning_en = second_res.get("meaning", meaning_en)
-            native_p = second_res.get("native_p", native_p)
-            latin_p = second_res.get("latin_p", latin_p)
-
-    # Save sender's verified language
+    # Save user's detected language dynamically
     user_langs[user_id] = src_lang
 
     if not is_vip:
@@ -414,9 +396,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     latin_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
     meaning_block = f"📖 <i>Meaning (EN):</i> {meaning_en}\n" if meaning_en else ""
 
+    mode_tag = "🧑‍🏫 Solo Tutor" if is_solo else "👥 Group Bridge"
+
     card_text = (
         f"{vip_header}"
-        f"👤 <b>{user_name}</b>\n"
+        f"👤 <b>{user_name}</b> ({mode_tag})\n"
         f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"📍 <i>{src_info['loc']} ⇄ {trg_info['loc']}</i>\n\n"
         f"<blockquote>{quote_symbol}{translation}</blockquote>"
@@ -546,7 +530,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     except Exception:
         await update.message.reply_text(gift_text, parse_mode="HTML")
 
-# 12. Main Safe Application Loop
+# 12. Run Engine
 async def run_bot():
     await start_web_server()
 
