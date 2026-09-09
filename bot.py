@@ -88,7 +88,7 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Bulletproof Dynamic Auto-Discover Groq Engine
+# 5. Fully Dynamic Auto-Discover Groq Engine
 def _sync_groq_call(text, recent_languages=None, is_group=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is not configured in Render!"}
@@ -128,7 +128,6 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    # Automatically scan available models from Groq API in real-time
     models_to_try = []
     try:
         m_list = client.models.list()
@@ -139,8 +138,7 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
     except Exception:
         pass
 
-    # Fallback list if api list fails
-    for fallback in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192", "gemma2-9b-it"]:
+    for fallback in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
 
