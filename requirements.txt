@@ -1,6 +1,8 @@
 python-telegram-bot
 groq
 aiohttp
+edge-tts
 gTTS
+
 
 
