@@ -23,13 +23,13 @@ from telegram.ext import (
 )
 from groq import Groq
 
-# 1. Credentials
+# 1. Credentials & Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-# 2. Render Keep-Alive Server
+# 2. Render Keep-Alive Web Server
 async def handle_ping(request):
-    return web.Response(text="Translator Bridge Core Online & Healthy!")
+    return web.Response(text="Translator Bridge Core Online & Flawless!")
 
 async def start_web_server():
     app = web.Application()
@@ -41,16 +41,16 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Themes: 4 Free + VIP Luxury Vault
+# 3. Verified Themes: 4 Free + VIP Luxury Vault
 STANDARD_THEMES = {
-    "chibi": {"label": "🎀 Chibi Anime Girl Talking Fast", "url": "https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExOHp1M3N6Z3E5aHF0ZXBrcTVqZ2h1anA1dzNxdHRld3I3M3J1eHhzNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/B2wxqJaigm4E0/giphy.gif", "vip": False},
-    "doge": {"label": "🐕 Funny Confused / Breakthrough Doge", "url": "https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExODg3MmV2ZzhxZnpxd3pza2YwdnlldTV4bnd5aDN2bnh1ejB0N3p2ciZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/5Zesu5VPNGJlm/giphy.gif", "vip": False},
-    "minion": {"label": "🍌 Excited Minion Polyglot", "url": "https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExanJ3ODlsYmhhZ3B5dWVld3d5eW5ldDFnZzM0a2N0a3pvcXB1bGJreSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/11sBLVxNs7v6WA/giphy.gif", "vip": False},
-    "cat": {"label": "🐱 Dancing Happy Cat", "url": "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExZjBsdnlwb2tuaWN6a2o5aTJqbnk0NGZqZDRldmdxdW52ZWNqZXpmdCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/JIX9t2j0ZTN9S/giphy.gif", "vip": False},
+    "chibi": {"label": "🎀 Chibi Anime Girl", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
+    "doge": {"label": "🐕 Thinking Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
+    "minion": {"label": "🍌 Excited Minion", "url": "https://media.giphy.com/media/11sBLVxNs7v6WA/giphy.gif", "vip": False},
+    "cat": {"label": "🐱 Dancing Cat", "url": "https://media.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif", "vip": False},
 }
 
 PREMIUM_THEMES = {
-    "vip_gold": {"label": "👑 Royal Imperial Gold", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "quote_prefix": "👑 ", "vip": True},
+    "vip_gold": {"label": "👑 Royal Gold VIP", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "quote_prefix": "👑 ", "vip": True},
     "vip_cyber": {"label": "🐉 Cyber Tokyo Neon", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBER MATRIX VIP ⚡", "quote_prefix": "🔮 ", "vip": True},
     "vip_matrix": {"label": "⚡ Quantum Matrix Core", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "✨ ASTRAL HORIZON ✨", "quote_prefix": "🪐 ", "vip": True},
     "vip_sound": {"label": "🎧 Hologram Soundwaves", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "quote_prefix": "❄️ ", "vip": True}
@@ -88,20 +88,17 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Dual Model Fallback AI Translation
+# 5. Dynamic AI Translation Engine (No Model 404 Failures)
 def _sync_groq_call(text, target_hint):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY missing! Set it in Render Environment Variables."}
 
     client = Groq(api_key=GROQ_API_KEY)
-    
-    # Dual Model Strategy: Primary Heavy Model -> Backup Fast Model
-    models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
 
     system_instruction = (
         "You are an expert bilingual live dialogue interpreter.\n"
-        "Rules:\n"
-        "1. Detect the source language accurately.\n"
+        "Strict Translation Rules:\n"
+        "1. Identify the source language.\n"
         "2. If input is Malayalam or English, target is Persian (unless partner language is specified).\n"
         "3. If input is Persian/Tajik, target is Malayalam.\n"
         "4. If target_hint is specified and different from source, translate into target_hint.\n"
@@ -118,11 +115,25 @@ def _sync_groq_call(text, target_hint):
 
     user_prompt = f"Text: \"{text}\"\nTarget Requirement: {target_hint or 'Auto-Detect'}"
 
-    last_error = ""
-    for model_name in models_to_try:
+    # Auto-fetch working models dynamically from Groq account
+    active_models = []
+    try:
+        model_list = client.models.list()
+        active_models = [
+            m.id for m in model_list.data
+            if not any(x in m.id.lower() for x in ["whisper", "guard", "vision", "embed", "safeguard"])
+        ]
+    except Exception:
+        active_models = ["llama-3.3-70b-versatile", "llama3-70b-8192", "mixtral-8x7b-32768"]
+
+    if not active_models:
+        active_models = ["llama-3.3-70b-versatile"]
+
+    last_err = ""
+    for model_id in active_models:
         try:
             completion = client.chat.completions.create(
-                model=model_name,
+                model=model_id,
                 messages=[
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": user_prompt}
@@ -131,7 +142,6 @@ def _sync_groq_call(text, target_hint):
                 max_tokens=400,
             )
             raw = completion.choices[0].message.content.strip()
-            
             parsed = {}
             for line in raw.splitlines():
                 line = line.strip()
@@ -145,15 +155,15 @@ def _sync_groq_call(text, target_hint):
             if parsed.get("trans"):
                 return parsed
         except Exception as e:
-            last_error = str(e)
+            last_err = str(e)
             continue
 
-    return {"error": last_error or "AI Translation Engine unavailable."}
+    return {"error": last_err or "Translation failed."}
 
 async def execute_translation(text, target_hint=None):
     return await asyncio.to_thread(_sync_groq_call, text, target_hint)
 
-# 6. Quota & Subscriptions
+# 6. Quota & VIP Logic
 FREE_LIMIT = 100
 PLANS = {
     "sub_1m": {"name": "1 Month VIP", "days": 30, "stars": 50, "badge": "⭐️ VIP"},
@@ -181,8 +191,8 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⭐️ <b>STAR VIP STORE & VAULT</b> ⭐️\n\n"
         "Free translation quota exhausted!\n\n"
-        "• Unlimited Automatic 2-Way Translations\n"
-        "• Dual Voice Audio Playback with 0.75x Slow-Motion\n"
+        "• Unlimited 2-Way Translations\n"
+        "• Dual Voice Audio with 0.75x Slow-Motion\n"
         "• Secret VIP Luxury Themes\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
         "• <b>3 Months ELITE:</b> 120 Stars <i>(20% Off)</i>\n"
@@ -212,6 +222,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌐 <b>SMART 2-WAY DIALOGUE INTERPRETER</b>\n"
         f"{vip_badge}\n"
         "• ⚡ <b>100% Automatic</b>: Locks languages dynamically for all chat partners.\n"
+        "• 🎙 <b>Voice Input Enabled</b>: Speak or type in any language!\n"
         "• 🔄 <b>Cross Translation</b>: Seamless bidirectional live conversation.\n"
         "• 🗣 <b>Dual Phonetics</b>: Native script phonetics & English Latin transliteration.\n"
         "• 🔊 <b>Single Target Audio</b>: Listen to the translated native pronunciation.\n\n"
@@ -220,7 +231,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 /status • Check quota & VIP status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • Star VIP Store\n\n"
-        "Send any message or voice note to begin!"
+        "Send any text or voice note to begin!"
     )
     try:
         await update.message.reply_animation(animation=active_theme["url"], caption=welcome, parse_mode="HTML")
@@ -277,7 +288,49 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Dynamic Multi-User Cross-Language Routing
+# 8. Handling Incoming Voice Notes (Whisper AI Transcription)
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.chat_data.get("paused", False):
+        return
+
+    user = update.effective_user
+    user_id = str(user.id)
+    active, status_val, is_vip = is_user_active(context, user_id)
+    if not active:
+        await send_store_menu(update.effective_chat.id, context)
+        return
+
+    voice = update.message.voice or update.message.audio
+    if not voice:
+        return
+
+    placeholder = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
+
+    file = await context.bot.get_file(voice.file_id)
+    temp_path = f"temp_{voice.file_id}.ogg"
+    await file.download_to_drive(temp_path)
+
+    try:
+        def _transcribe():
+            client = Groq(api_key=GROQ_API_KEY)
+            with open(temp_path, "rb") as audio_file:
+                return client.audio.transcriptions.create(
+                    file=(temp_path, audio_file.read()),
+                    model="whisper-large-v3"
+                ).text.strip()
+
+        spoken_text = await asyncio.to_thread(_transcribe)
+        await placeholder.delete()
+        update.message.text = spoken_text
+        await handle_text(update, context)
+
+    except Exception as e:
+        await placeholder.edit_text(f"⚠️ <b>Voice Processing Error:</b> {str(e)[:80]}", parse_mode="HTML")
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+# 9. Dynamic Multi-User Cross-Language Routing (Text Messages)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
         return
@@ -304,11 +357,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     other_users = [uid for uid in user_langs if uid != user_id]
     partner_lang = user_langs[other_users[-1]] if other_users else None
 
-    # Intelligent Malayalam / Persian Defaults
     is_malayalam = bool(re.search(r'[\u0D00-\u0D7F]', text))
     target_request = partner_lang or ("Persian" if is_malayalam else "Malayalam")
 
-    # Call AI with dual-model fallback
+    # Call AI with dynamic model discovery
     res = await execute_translation(text, target_request)
 
     if "error" in res:
@@ -390,7 +442,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 9. Dual-Engine Audio Player (Edge-TTS + gTTS Auto-Fallback)
+# 10. Dual-Engine Audio Player (Edge-TTS + gTTS Auto-Fallback)
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎙️ Generating native speech...")
@@ -425,7 +477,7 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             worked = False
 
-    # Attempt 2: Auto Fallback to Google TTS (Guarantees Voice Always Plays)
+    # Attempt 2: Auto Fallback to Google TTS
     if not worked:
         try:
             def _gtts_task():
@@ -451,7 +503,7 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     caption = f"🔊 <i>{speed_label} ({cache['lang']}): \"{text_to_speak[:45]}...\"</i>"
     await context.bot.send_voice(chat_id=query.message.chat_id, voice=audio_buf, caption=caption, parse_mode="HTML")
 
-# 10. Star Payments
+# 11. Star Payments
 async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -494,7 +546,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     except Exception:
         await update.message.reply_text(gift_text, parse_mode="HTML")
 
-# 11. Run Engine
+# 12. Main Safe Application Loop
 async def run_bot():
     await start_web_server()
 
@@ -511,6 +563,7 @@ async def run_bot():
     app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^(play_|slow_)"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
