@@ -123,22 +123,10 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    # Groq-ൽ നിന്ന് ആക്ടീവ് ആയ മോഡലുകൾ ഓട്ടോമാറ്റിക് ആയി ഫെച്ച് ചെയ്തു എടുക്കുന്ന സിസ്റ്റം
-    try:
-        models_response = client.models.list()
-        available_models = [m.id for m in models_response.data if "llama" in m.id or "mixtral" in m.id or "gemma" in m.id]
-    except Exception:
-        available_models = []
-
-    # ഫെച്ച് ചെയ്യാൻ പറ്റിയില്ലെങ്കിൽ ഏറ്റവും സുരക്ഷിതമായ ബാക്ക്അപ്പ് ലിസ്റ്റ്
-fallback_models = available_models + [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "llama-3.2-3b-preview"
-]
-
+    models_to_try = ["llama-3.1-8b-instant"]
     last_error = ""
-    for model_name in fallback_models:
+
+    for model_name in models_to_try:
         try:
             completion = client.chat.completions.create(
                 model=model_name,
