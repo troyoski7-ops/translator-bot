@@ -1,8 +1,9 @@
-google-generativeai
+google-genai
 python-telegram-bot
 gtts
 edge-tts
 aiohttp
+
 
 
 
