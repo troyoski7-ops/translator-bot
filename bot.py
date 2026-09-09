@@ -31,9 +31,9 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 ANIM_STORE_URL = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnYydWhsazBqczJycHJmdTR5cWNvZGFoYm95am03MGl2aTFxZTN3ZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYWZ0N25xZG82OXF0NWlhbnF6bWc2dHFob2ZlZmxmbnlucTNtc2xxeSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0ExhcMymdL6TrZ84/giphy.gif"
 
-# 2. Render Keep-Alive
+# 2. Render Keep-Alive Server
 async def handle_ping(request):
-    return web.Response(text="Translator Core Online!")
+    return web.Response(text="Translator Bridge Live!")
 
 async def start_web_server():
     app = web.Application()
@@ -45,7 +45,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Themes: 4 Free + VIP Vault
+# 3. Themes: 4 Free + VIP Luxury Vault
 STANDARD_THEMES = {
     "chibi": {"label": "🎀 Chibi Anime Girl Talking Fast", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
     "doge": {"label": "🐕 Funny Confused / Breakthrough Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
@@ -62,21 +62,25 @@ PREMIUM_THEMES = {
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
 
-# 4. Neural Voices Mapping (Guaranteed 100% Working Voices)
+# 4. Neural Voices Mapping (Edge-TTS)
 VOICE_MAP = {
     "persian": {"voice": "fa-IR-DilaraNeural", "flag": "🇮🇷", "loc": "Tehran"},
     "farsi": {"voice": "fa-IR-DilaraNeural", "flag": "🇮🇷", "loc": "Tehran"},
     "malayalam": {"voice": "ml-IN-SobhanaNeural", "flag": "🇮🇳", "loc": "Kerala"},
+    "german": {"voice": "de-DE-KatjaNeural", "flag": "🇩🇪", "loc": "Berlin"},
+    "english": {"voice": "en-US-JennyNeural", "flag": "🇬🇧", "loc": "London"},
     "tajik": {"voice": "tg-TJ-GanjinaNeural", "flag": "🇹🇯", "loc": "Dushanbe"},
     "azerbaijani": {"voice": "az-AZ-BabekNeural", "flag": "🇦🇿", "loc": "Baku"},
+    "azeri": {"voice": "az-AZ-BabekNeural", "flag": "🇦🇿", "loc": "Baku"},
     "turkish": {"voice": "tr-TR-AhmetNeural", "flag": "🇹🇷", "loc": "Istanbul"},
     "uzbek": {"voice": "uz-UZ-MadinaNeural", "flag": "🇺🇿", "loc": "Tashkent"},
     "kazakh": {"voice": "kk-KZ-AigulNeural", "flag": "🇰🇿", "loc": "Astana"},
     "russian": {"voice": "ru-RU-SvetlanaNeural", "flag": "🇷🇺", "loc": "Moscow"},
-    "english": {"voice": "en-US-JennyNeural", "flag": "🇬🇧", "loc": "London"},
     "arabic": {"voice": "ar-AE-HamdanNeural", "flag": "🇦🇪", "loc": "Dubai"},
-    "german": {"voice": "de-DE-KatjaNeural", "flag": "🇩🇪", "loc": "Berlin"},
     "hindi": {"voice": "hi-IN-SwaraNeural", "flag": "🇮🇳", "loc": "Delhi"},
+    "french": {"voice": "fr-FR-DeniseNeural", "flag": "🇫🇷", "loc": "Paris"},
+    "spanish": {"voice": "es-ES-ElviraNeural", "flag": "🇪🇸", "loc": "Madrid"},
+    "italian": {"voice": "it-IT-ElsaNeural", "flag": "🇮🇹", "loc": "Rome"},
 }
 
 def get_voice_info(lang_name):
@@ -86,26 +90,34 @@ def get_voice_info(lang_name):
             return v
     return {"voice": "en-US-JennyNeural", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Groq Translation
-def process_groq_translation(text, target_hint=None):
+# 5. Universal Translation Engine (Automatic Language Bridge)
+def execute_bridge_translation(text, target_hint=None):
     if not GROQ_API_KEY:
         return None
 
     system_instruction = (
-        "You are an expert bilingual bridge interpreter between two chatting users.\n"
-        "1. Identify the source language (e.g., Malayalam, Persian, Tajik, Turkish, Uzbek, English, etc.).\n"
-        "2. If Target Language Hint is provided and DIFFERENT from source, translate into that target language. "
-        "If no hint is provided or hint is the same as source, translate Malayalam to Persian, Persian to Malayalam, and other languages to English.\n"
-        "3. Always generate phonetic romanized English pronunciation for BOTH the source input and translated output.\n"
-        "Output strictly in this 6-line format:\n"
-        "SRC_LANG: [Source Language Name]\n"
+        "You are an infallible bilingual chat interpreter bridging two people.\n"
+        "1. Accurately detect the source language of the input text.\n"
+        "2. If Target Language is provided and DIFFERENT from source, translate into that target language.\n"
+        "   If no target is provided or target is identical to source, automatically cross-translate:\n"
+        "   - Persian/Tajik -> Malayalam (or English)\n"
+        "   - Malayalam -> Persian\n"
+        "   - English -> Persian\n"
+        "   - Other languages -> English\n"
+        "3. Provide the English Meaning of the sentence.\n"
+        "4. Provide two pronunciations for the translated text:\n"
+        "   - TRG_NATIVE_PHONETIC: Native script or native phonetic writing helper.\n"
+        "   - TRG_EN_PHONETIC: Transliteration in Latin English alphabet so any speaker can easily pronounce it.\n"
+        "Strictly output in this 7-line format:\n"
+        "SRC_LANG: [Detected Source Language Name]\n"
         "TRG_LANG: [Target Language Name]\n"
-        "SRC_PRON: [Phonetic English pronunciation of the source input]\n"
-        "TRG_PRON: [Phonetic English pronunciation of the translated text]\n"
+        "ENG_MEANING: [Clear English Meaning]\n"
+        "TRG_NATIVE_PHONETIC: [Phonetic helper in native script/system]\n"
+        "TRG_EN_PHONETIC: [Phonetic transliteration in English letters]\n"
         "RES: [Translated text only]"
     )
 
-    user_prompt = f"Input Text: \"{text}\"\nTarget Language Hint: {target_hint or 'None'}"
+    user_prompt = f"Text: \"{text}\"\nTarget Hint: {target_hint or 'Auto-Detect'}"
 
     try:
         completion = groq_client.chat.completions.create(
@@ -115,7 +127,7 @@ def process_groq_translation(text, target_hint=None):
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.1,
-            max_tokens=400,
+            max_tokens=450,
         )
         return completion.choices[0].message.content.strip()
     except Exception:
@@ -149,8 +161,8 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⭐️ <b>STAR VIP STORE & VAULT</b> ⭐️\n\n"
         "Free translation quota exhausted!\n\n"
-        "• Unlimited 2-Way Translations\n"
-        "• Ultra-Clear Neural Voices (Persian, Malayalam, etc.)\n"
+        "• Unlimited Automatic 2-Way Translations\n"
+        "• Ultra-Clear Neural Voice Playback\n"
         "• 0.75x Slow-Motion Voice Player\n"
         "• Secret VIP Luxury Themes\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
@@ -167,7 +179,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Handlers
+# 7. Handlers & Commands
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -178,12 +190,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vip_badge = "👑 <b>VIP PRIVILEGES ACTIVE</b>\n" if is_vip else ""
 
     welcome = (
-        f"🌐 <b>SMART 2-WAY TRANSLATOR</b>\n"
+        f"🌐 <b>SMART 2-WAY DIALOGUE INTERPRETER</b>\n"
         f"{vip_badge}\n"
-        "• ⚡ Instant auto 2-way cross translation\n"
-        "• 🗣 Dual Phonetics (Original & Translated)\n"
-        "• 🔊 Crystal-Clear Neural Persian Voice Enabled!\n\n"
-        "/theme • Change themes | /status • Check quota"
+        "• ⚡ <b>100% ഓട്ടോമാറ്റിക്</b>: രണ്ട് പേരുടെ ഭാഷയും തനിയെ ലോക്ക് ചെയ്യുന്നു!\n"
+        "• 🔄 സംസാരിക്കുന്നതിനനുസരിച്ച് തനിയെ അങ്ങോട്ടും ഇങ്ങോട്ടും ട്രാൻസ്ലേറ്റ് ചെയ്യും.\n"
+        "• 🗣 <b>Dual Phonetics</b>: തനത് ഉച്ചാരണവും ഇംഗ്ലീഷ് Transliteration-ഉം!\n"
+        "• 🔊 <b>Single Target Voice</b>: കേൾക്കേണ്ട ഭാഷയുടെ വോയ്‌സ് മാത്രം താഴെ പ്ലേ ചെയ്യാം.\n\n"
+        "<b>Commands:</b>\n"
+        "🎨 /theme • Change start screen theme\n"
+        "📊 /status • Check quota / VIP status\n"
+        "⏸ /stop • Pause | ▶️ /resume • Resume\n"
+        "⭐️ /premium • VIP Star Store"
     )
     try:
         await update.message.reply_animation(animation=active_theme["url"], caption=welcome, parse_mode="HTML")
@@ -221,22 +238,29 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     _, status_val, _ = is_user_active(context, user_id)
     state = "⏸ Paused" if context.chat_data.get("paused", False) else "▶️ Active"
-    await update.message.reply_text(f"📊 <b>STATUS</b>\n🏃 Quota: {status_val}\n🔄 State: {state}", parse_mode="HTML")
+    await update.message.reply_text(
+        f"📊 <b>STATUS</b>\n\n"
+        f"🏃 Usage Quota: {status_val}\n"
+        f"🔄 State: {state}\n\n"
+        f"<i>Unlock unlimited usage & VIP themes with /premium</i>",
+        parse_mode="HTML"
+    )
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = True
-    await update.message.reply_text("⏸ <b>Translations Paused!</b>", parse_mode="HTML")
+    await update.message.reply_text("⏸ <b>Translations Paused!</b> Send /resume to start again.", parse_mode="HTML")
 
 async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
-    await update.message.reply_text("▶️ <b>Translations Resumed!</b>", parse_mode="HTML")
+    await update.message.reply_text("▶️ <b>Translations Resumed!</b> Listening 🏃💨", parse_mode="HTML")
 
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Core Text & Translation Logic
+# 8. 100% Automatic 2-Way Language Bridge Logic
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.chat_data.get("paused", False): return
+    if context.chat_data.get("paused", False): 
+        return
 
     user = update.effective_user
     user_id = str(user.id)
@@ -250,19 +274,24 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     placeholder = await update.message.reply_text("<i>Translating... 🏃</i>", parse_mode="HTML")
 
-    if "chat_users" not in context.chat_data:
-        context.chat_data["chat_users"] = {}
+    # ഓരോ യൂസറുടെയും ഏറ്റവും പുതിയ ഭാഷ ഓട്ടോമാറ്റിക് ആയി സേവ് ചെയ്യുന്നു
+    if "user_languages" not in context.chat_data:
+        context.chat_data["user_languages"] = {}
 
-    chat_users = context.chat_data["chat_users"]
-    other_user_ids = [uid for uid in chat_users if uid != user_id]
-    target_hint = chat_users[other_user_ids[0]] if other_user_ids else None
+    user_languages = context.chat_data["user_languages"]
 
-    raw_response = process_groq_translation(text, target_hint)
+    # ചാറ്റിലെ രണ്ടാമത്തെ ആളിന്റെ ലേറ്റസ്റ്റ് ഭാഷ കണ്ടെത്തുന്നു
+    partner_ids = [uid for uid in user_languages if uid != user_id]
+    partner_target_lang = user_languages[partner_ids[0]] if partner_ids else None
 
-    src_lang = "Original"
-    trg_lang = target_hint or "Persian"
-    src_pron = ""
-    trg_pron = ""
+    # AI വഴി ട്രാൻസ്ലേറ്റ് ചെയ്യുന്നു
+    raw_response = execute_bridge_translation(text, partner_target_lang)
+
+    src_lang = "Detected"
+    trg_lang = partner_target_lang or "Persian"
+    eng_meaning = ""
+    trg_native_pron = ""
+    trg_en_pron = ""
     translation = text
 
     if raw_response:
@@ -270,13 +299,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             line = line.strip()
             if line.startswith("SRC_LANG:"): src_lang = line.replace("SRC_LANG:", "").strip()
             elif line.startswith("TRG_LANG:"): trg_lang = line.replace("TRG_LANG:", "").strip()
-            elif line.startswith("SRC_PRON:"): src_pron = line.replace("SRC_PRON:", "").strip()
-            elif line.startswith("TRG_PRON:"): trg_pron = line.replace("TRG_PRON:", "").strip()
+            elif line.startswith("ENG_MEANING:"): eng_meaning = line.replace("ENG_MEANING:", "").strip()
+            elif line.startswith("TRG_NATIVE_PHONETIC:"): trg_native_pron = line.replace("TRG_NATIVE_PHONETIC:", "").strip()
+            elif line.startswith("TRG_EN_PHONETIC:"): trg_en_pron = line.replace("TRG_EN_PHONETIC:", "").strip()
             elif line.startswith("RES:"): translation = line.replace("RES:", "").strip()
 
-    # Lock this user's language
+    # അയച്ച ആളുടെ ഭാഷ ഓട്ടോമാറ്റിക് ആയി അപ്‌ഡേറ്റ് ചെയ്യുന്നു
     if src_lang and "unknown" not in src_lang.lower():
-        chat_users[user_id] = src_lang
+        user_languages[user_id] = src_lang
+
+    # ഒരേ ഭാഷ തന്നെ വരാതിരിക്കാനുള്ള സ്മാർട്ട് ചെക്ക് (Persian -> Persian ഒഴിവാക്കുന്നു)
+    if src_lang.strip().lower() == trg_lang.strip().lower():
+        if "persian" in src_lang.lower() or "farsi" in src_lang.lower():
+            trg_lang = "Malayalam" if partner_target_lang == "Malayalam" else "English"
+        elif "malayalam" in src_lang.lower():
+            trg_lang = "Persian"
+        else:
+            trg_lang = "English"
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
@@ -297,17 +336,20 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quote_symbol = ""
         status_line = f"🏃 Status: {status_val}"
 
-    src_pron_str = f"🗣 <i>Original:</i> <code>{src_pron}</code>\n" if src_pron and src_pron.upper() != "NONE" else ""
-    trg_pron_str = f"🗣 <i>Phonetic:</i> <tg-spoiler>{trg_pron}</tg-spoiler>\n" if trg_pron and trg_pron.upper() != "NONE" else ""
+    # തനത് ലിപിയിലെയും ഇംഗ്ലീഷ് ലാറ്റിൻ ലിപിയിലെയും ഉച്ചാരണം
+    native_pron_block = f"🗣 <i>Phonetic Script ({trg_lang}):</i> <code>{trg_native_pron}</code>\n" if trg_native_pron and trg_native_pron.upper() != "NONE" else ""
+    en_pron_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{trg_en_pron}</tg-spoiler>\n" if trg_en_pron and trg_en_pron.upper() != "NONE" else ""
+    meaning_block = f"📖 <i>Meaning (EN):</i> {eng_meaning}\n" if eng_meaning and eng_meaning.upper() != "NONE" else ""
 
     card_text = (
         f"{vip_header}"
         f"👤 <b>{user_name}</b>\n"
         f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"📍 <i>{src_info['loc']} ⇄ {trg_info['loc']}</i>\n\n"
-        f"{src_pron_str}"
         f"<blockquote>{quote_symbol}{translation}</blockquote>"
-        f"{trg_pron_str}\n"
+        f"{native_pron_block}"
+        f"{en_pron_block}"
+        f"{meaning_block}\n"
         f"{status_line}"
     )
 
@@ -318,6 +360,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "lang": trg_lang
     }
 
+    # ഒരൊറ്റ ഓഡിയോ ബട്ടൺ (Target Voice Only)
     keyboard = [
         [InlineKeyboardButton(f"🔊 Listen ({trg_info['flag']} {trg_lang})", callback_data=f"play_{msg_id}")]
     ]
@@ -326,10 +369,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 9. Crystal-Clear Edge-TTS Voice Audio Generator
+# 9. Crystal-Clear Edge-TTS Voice Generator
 async def handle_tts_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🎙️ Generating Persian/Native Voice...")
+    await query.answer("🎙️ Generating native voice...")
     data = query.data
 
     is_slow = data.startswith("slow_")
@@ -432,8 +475,13 @@ async def run_bot():
         try:
             await app.updater.start_polling(drop_pending_updates=True)
             while True: await asyncio.sleep(3600)
-        except Exception:
-            await asyncio.sleep(5)
+        except Exception as e:
+            if "Conflict" in str(e):
+                try: await app.updater.stop()
+                except Exception: pass
+                await asyncio.sleep(10)
+            else:
+                await asyncio.sleep(5)
 
 def main():
     try: asyncio.run(run_bot())
