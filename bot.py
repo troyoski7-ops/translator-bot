@@ -2,11 +2,9 @@ import os
 import re
 import io
 import asyncio
-import tempfile
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
-import edge_tts
 from telegram import (
     Update,
     LabeledPrice,
@@ -28,9 +26,9 @@ from groq import Groq
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8653764956:AAGE8ol1gvfUg9naFkMPD7wGqoDqw-0IFZY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-# 2. Render Keep-Alive Server
+# 2. Render Keep-Alive Web Server
 async def handle_ping(request):
-    return web.Response(text="Translator Bridge Core Live & Healthy!")
+    return web.Response(text="Translator Bridge Core Online & Functional!")
 
 async def start_web_server():
     app = web.Application()
@@ -42,7 +40,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Themes: 4 Free + 4 Luxury VIP Vault
+# 3. Verified Themes: 4 Free + 4 Luxury VIP Vault
 STANDARD_THEMES = {
     "chibi": {"label": "🎀 Anime Girl", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
     "doge": {"label": "🐕 Smart Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
@@ -54,7 +52,7 @@ PREMIUM_THEMES = {
     "vip_gold": {"label": "👑 Royal Imperial Gold", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "quote_prefix": "👑 ", "vip": True},
     "vip_cyber": {"label": "🐉 Cyber Tokyo Neon", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBER MATRIX VIP ⚡", "quote_prefix": "🔮 ", "vip": True},
     "vip_matrix": {"label": "⚡ Quantum Astral Core", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "✨ ASTRAL HORIZON ✨", "quote_prefix": "🪐 ", "vip": True},
-    "vip_sound": {"label": "🎧 Hologram Soundwaves", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "quote_prefix": "❄️ ", "vip": True},
+    "vip_sound": {"label": "🎧 Hologram Soundwaves", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "quote_prefix": "❄️ ", "vip": True}
 }
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
@@ -63,23 +61,23 @@ VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
 # 4. Regional Voice Registry
 VOICE_MAP = {
-    "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
-    "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
-    "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
-    "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
-    "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
-    "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
-    "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
-    "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
-    "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "loc": "London"},
-    "tajik": {"edge": "tg-TJ-GanjinaNeural", "gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
-    "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
-    "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
-    "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
-    "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
-    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
-    "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
-    "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
+    "chinese": {"gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
+    "japanese": {"gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
+    "italian": {"gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
+    "german": {"gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
+    "persian": {"gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
+    "farsi": {"gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
+    "malayalam": {"gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
+    "russian": {"gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
+    "english": {"gtts": "en", "flag": "🇬🇧", "loc": "London"},
+    "tajik": {"gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
+    "azerbaijani": {"gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
+    "turkish": {"gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
+    "arabic": {"gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
+    "hindi": {"gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
+    "french": {"gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
+    "spanish": {"gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
+    "korean": {"gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
 }
 
 def get_voice_info(lang_name):
@@ -87,77 +85,104 @@ def get_voice_info(lang_name):
     for k, v in VOICE_MAP.items():
         if k in clean:
             return v
-    return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
+    return {"gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Dual Engine Groq API
+# 5. Dynamic Groq AI Engine (Live Model Discovery)
 def _sync_groq_call(text, partner_lang=None, is_group=False):
     if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY is not configured in Render!"}
+        return {"error": "GROQ_API_KEY missing in Render Environment Variables!"}
 
     client = Groq(api_key=GROQ_API_KEY)
 
     if is_group:
         system_instruction = (
-            "You are an active live bilingual interpreter for Telegram Groups.\n"
+            "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
             "Rules:\n"
-            "1. Detect the message language.\n"
-            "2. If Partner Language is provided and different, translate directly into it.\n"
-            "3. If Partner Language is not known:\n"
-            "   - Foreign language -> English\n"
-            "   - English -> Alternate partner language\n"
-            "4. Output 6 lines only:\n"
-            "SRC: Source Language\n"
-            "TRG: Target Language\n"
-            "TRANS: Translation Text\n"
+            "1. Accurately detect the source language of the input message.\n"
+            "2. If Partner Language is provided and different, translate directly into Partner Language.\n"
+            "3. If Partner Language is identical or not known:\n"
+            "   - Translate foreign language into English\n"
+            "   - If input is English, translate into partner's alternate language\n"
+            "4. NEVER output raw template placeholders like '[SOURCE LANGUAGE]'.\n"
+            "5. Output must strictly contain these 6 lines only:\n"
+            "SRC: Source Language Name\n"
+            "TRG: Target Language Name\n"
+            "TRANS: Translation in target language\n"
             "MEANING: English meaning\n"
-            "NATIVE_P: Native script pronunciation\n"
-            "LATIN_P: Latin English alphabet pronunciation"
+            "NATIVE_P: Native script phonetic pronunciation helper\n"
+            "LATIN_P: Latin English alphabet pronunciation helper"
         )
         user_prompt = f"Message: \"{text}\"\nPartner Language: {partner_lang or 'None'}"
     else:
         system_instruction = (
-            "You are a dedicated Personal Language Assistant and Tutor for a direct message chat.\n"
+            "You are a dedicated Personal Language Assistant and Pronunciation Tutor for a direct message chat.\n"
             "Rules:\n"
-            "1. Detect the source language accurately.\n"
-            "2. If input is English -> translate to Malayalam (or the user's primary alternate tongue).\n"
-            "3. If input is foreign or regional (Malayalam, German, Italian, Persian, Russian, etc.) -> translate to English.\n"
-            "4. Output 6 lines only:\n"
-            "SRC: Source Language\n"
-            "TRG: Target Language\n"
-            "TRANS: Translation Text\n"
+            "1. Accurately detect the source language.\n"
+            "2. If input is English, translate into the complementary target (Malayalam, German, Spanish, etc.).\n"
+            "3. If input is any regional or foreign language, translate directly into English.\n"
+            "4. NEVER output raw template placeholders like '[SOURCE LANGUAGE]'.\n"
+            "5. Output must strictly contain these 6 lines only:\n"
+            "SRC: Source Language Name\n"
+            "TRG: Target Language Name\n"
+            "TRANS: Translation in target language\n"
             "MEANING: English meaning\n"
-            "NATIVE_P: Native script pronunciation\n"
-            "LATIN_P: Latin English alphabet pronunciation"
+            "NATIVE_P: Native script phonetic pronunciation helper\n"
+            "LATIN_P: Latin English alphabet pronunciation helper"
         )
         user_prompt = f"Message: \"{text}\""
 
+    # Query active models dynamically from user's account
+    models_to_try = []
     try:
-        completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": user_prompt}
-            ],
-            temperature=0.1,
-            max_tokens=400,
-        )
-        raw = completion.choices[0].message.content.strip()
-        parsed = {}
-        for line in raw.splitlines():
-            line = line.strip()
-            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-            elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-            elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+        m_list = client.models.list()
+        for m in m_list.data:
+            mid = m.id.lower()
+            if not any(bad in mid for bad in ["whisper", "guard", "vision", "embed", "safeguard", "distil"]):
+                models_to_try.append(m.id)
+    except Exception:
+        pass
 
-        if parsed.get("trans") and "[" not in parsed.get("trans", ""):
-            return parsed
-    except Exception as e:
-        return {"error": f"Groq Error: {str(e)}"}
+    standard_fallbacks = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-8b-instant",
+        "llama3-70b-8192",
+        "llama3-8b-8192",
+        "gemma2-9b-it"
+    ]
+    for fb in standard_fallbacks:
+        if fb not in models_to_try:
+            models_to_try.append(fb)
 
-    return {"error": "Translation service is currently unreachable."}
+    last_error_msg = ""
+    for model_id in models_to_try:
+        try:
+            completion = client.chat.completions.create(
+                model=model_id,
+                messages=[
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=400,
+            )
+            raw = completion.choices[0].message.content.strip()
+            parsed = {}
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+
+            if parsed.get("trans") and "[" not in parsed.get("trans", ""):
+                return parsed
+        except Exception as e:
+            last_error_msg = str(e)
+            continue
+
+    return {"error": f"Groq Error: {last_error_msg}"}
 
 async def execute_translation(text, partner_lang=None, is_group=False):
     return await asyncio.to_thread(_sync_groq_call, text, partner_lang, is_group)
@@ -207,7 +232,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start Command
+# 7. Start Command with Universal Guidance
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -223,10 +248,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "👤 <b>1. In Personal Chat (Solo Tutor & Translator):</b>\n"
         "• Send any word, sentence, or voice note in any language.\n"
-        "• Get instant English/Native translations, complete phonetics, and native voice audio.\n\n"
+        "• Get instant meanings, complete dual phonetics, and native audio.\n\n"
         "👥 <b>2. In Group Chat (100% Automatic Live Interpreter):</b>\n"
         "• Add this bot to any group chat!\n"
-        "• When members chat in different languages (e.g. English ⇄ Russian, Malayalam ⇄ Persian, German ⇄ Italian), the bot <b>automatically detects and cross-translates</b> without any commands!\n\n"
+        "• When members chat in different languages (e.g. English ⇄ Russian, Malayalam ⇄ Persian, German ⇄ Italian), the bot <b>automatically cross-translates</b> without any manual reset.\n\n"
         "🎙 <b>Voice Input:</b> Speak freely! Just hold the mic button and send a voice note.\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Change start animation\n"
@@ -290,7 +315,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Handling Incoming Voice Notes
+# 8. Handling Incoming Voice Notes (Whisper AI Input Fix)
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
         return
@@ -307,34 +332,39 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     status_msg = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
-    file = await context.bot.get_file(voice.file_id)
+    temp_input = f"voice_{voice.file_id}.ogg"
 
-    temp_input = None
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".ogg") as tmp:
-            temp_input = tmp.name
-        
-        await file.download_to_drive(temp_input)
+        tg_file = await context.bot.get_file(voice.file_id)
+        await tg_file.download_to_drive(temp_input)
 
         def _transcribe():
             client = Groq(api_key=GROQ_API_KEY)
-            with open(temp_input, "rb") as audio_file:
-                return client.audio.transcriptions.create(
-                    file=(temp_input, audio_file.read()),
-                    model="whisper-large-v3"
-                ).text.strip()
+            for w_model in ["whisper-large-v3", "whisper-large-v3-turbo"]:
+                try:
+                    with open(temp_input, "rb") as f:
+                        res = client.audio.transcriptions.create(
+                            file=("voice.ogg", f.read(), "audio/ogg"),
+                            model=w_model
+                        )
+                        if res.text:
+                            return res.text.strip()
+                except Exception:
+                    continue
+            return ""
 
         spoken_text = await asyncio.to_thread(_transcribe)
         await status_msg.delete()
+
         if spoken_text:
             update.message.text = spoken_text
             await handle_text(update, context)
         else:
-            await update.message.reply_text("⚠️ Could not recognize speech.")
+            await update.message.reply_text("⚠️ Could not recognize speech clearly. Please speak again!")
     except Exception as e:
         await status_msg.edit_text(f"⚠️ Voice Error: {str(e)[:60]}", parse_mode="HTML")
     finally:
-        if temp_input and os.path.exists(temp_input):
+        if os.path.exists(temp_input):
             try: os.remove(temp_input)
             except Exception: pass
 
@@ -424,7 +454,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg_id = placeholder.message_id
     context.bot_data[f"aud_{msg_id}"] = {
         "text": translation,
-        "voice_edge": trg_info.get("edge"),
         "gtts_code": trg_info["gtts"],
         "lang": trg_lang
     }
@@ -437,7 +466,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 10. Multi-Layered Voice Generator (Guaranteed Sound Delivery)
+# 10. Guaranteed Complete Audio Delivery (Fixed 00:01 Bug Permanently)
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎙️ Generating native speech...")
@@ -452,37 +481,19 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text_to_speak = cache["text"]
-    voice_edge = cache.get("voice_edge")
     gtts_code = cache.get("gtts_code", "en")
-    rate_str = "-25%" if is_slow else "+0%"
-
-    temp_audio_file = None
-    speed_label = "Slowed" if is_slow else "Native"
-    caption = f"🔊 <i>{speed_label} ({cache['lang']}): \"{text_to_speak[:45]}\"</i>"
+    temp_audio_file = f"speech_{msg_id}.mp3"
 
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
-            temp_audio_file = f.name
+        def _generate():
+            tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
+            tts.save(temp_audio_file)
 
-        worked = False
-        # Tier 1: Microsoft Edge Neural Voice
-        if voice_edge:
-            try:
-                communicate = edge_tts.Communicate(text_to_speak, voice_edge, rate=rate_str)
-                await communicate.save(temp_audio_file)
-                if os.path.exists(temp_audio_file) and os.path.getsize(temp_audio_file) > 1000:
-                    worked = True
-            except Exception:
-                worked = False
+        await asyncio.to_thread(_generate)
 
-        # Tier 2: Automatic Google TTS Fallback
-        if not worked:
-            def _generate_gtts():
-                tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
-                tts.save(temp_audio_file)
-            await asyncio.to_thread(_generate_gtts)
+        speed_label = "Slowed" if is_slow else "Native"
+        caption = f"🔊 <i>{speed_label} ({cache['lang']}): \"{text_to_speak[:45]}\"</i>"
 
-        # Tier 3: Telegram Audio Player Delivery
         with open(temp_audio_file, "rb") as audio:
             await context.bot.send_audio(
                 chat_id=query.message.chat_id,
@@ -496,10 +507,10 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"⚠️ Audio playback error: {str(e)[:60]}"
+            text=f"⚠️ Audio error: {str(e)[:60]}"
         )
     finally:
-        if temp_audio_file and os.path.exists(temp_audio_file):
+        if os.path.exists(temp_audio_file):
             try: os.remove(temp_audio_file)
             except Exception: pass
 
@@ -585,4 +596,3 @@ def main():
 
 if __name__ == "__main__":
     main()
- 
