@@ -87,7 +87,7 @@ def get_voice_info(lang_name):
             return v
     return {"gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Dynamic Groq AI Engine (Live Model Listing)
+# 5. Dynamic Groq AI Engine
 def _sync_groq_call(text, partner_lang=None, is_group=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is not configured in Render!"}
@@ -101,7 +101,7 @@ def _sync_groq_call(text, partner_lang=None, is_group=False):
             "1. Accurately detect the source language.\n"
             "2. If Partner Language is provided and different, translate directly into Partner Language.\n"
             "3. If Partner Language is not known, translate foreign text to English and English to partner's alternate language.\n"
-            "4. NEVER output raw template placeholders like '[SOURCE LANGUAGE]'.\n"
+            "4. NEVER output raw template placeholders.\n"
             "5. Output must strictly contain these 6 lines only:\n"
             "SRC: Source Language Name\n"
             "TRG: Target Language Name\n"
@@ -241,7 +241,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Get instant meanings, complete dual phonetics, and native audio.\n\n"
         "👥 <b>2. In Group Chat (100% Automatic Live Interpreter):</b>\n"
         "• Add this bot to any group chat!\n"
-        "• When members chat in different languages (e.g. English ⇄ Russian, Malayalam ⇄ Persian, German ⇄ Italian), the bot <b>automatically cross-translates</b> without any manual reset.\n\n"
+        "• When members chat in different languages, the bot <b>automatically cross-translates</b> without any manual reset.\n\n"
         "🎙 <b>Voice Input:</b> Hold the mic button and send a voice note.\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Change start animation\n"
@@ -305,7 +305,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Fixed Whisper Voice Input Handler (Direct In-Memory Processing)
+# 8. Fixed Voice Input Handler (Direct Bytearray Processing for Whisper)
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
         return
@@ -321,18 +321,14 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not voice:
         return
 
-    status_msg = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
+    status_msg = await update.message.reply_text("<i>Processing voice note... 🎙️</i>", parse_mode="HTML")
 
     try:
-        # Download straight into memory
         tg_file = await context.bot.get_file(voice.file_id)
-        buf = io.BytesIO()
-        await tg_file.download_to_memory(buf)
-        buf.seek(0)
-        audio_bytes = buf.read()
+        audio_bytes = await tg_file.download_as_bytearray()
 
-        if len(audio_bytes) < 150:
-            await status_msg.edit_text("⚠️ Voice recording too short. Please speak again!")
+        if len(audio_bytes) < 100:
+            await status_msg.edit_text("⚠️ Voice recording too short or silent.")
             return
 
         def _transcribe():
@@ -340,7 +336,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for model_candidate in ["whisper-large-v3", "whisper-large-v3-turbo"]:
                 try:
                     res = client.audio.transcriptions.create(
-                        file=("voice.ogg", audio_bytes, "audio/ogg"),
+                        file=("audio.ogg", bytes(audio_bytes), "audio/ogg"),
                         model=model_candidate
                     )
                     if res and res.text:
@@ -356,9 +352,9 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             update.message.text = spoken_text
             await handle_text(update, context)
         else:
-            await update.message.reply_text("⚠️ Could not hear audio clearly. Please try speaking closer to the mic.")
+            await update.message.reply_text("⚠️ Could not detect speech in the voice note. Please speak clearly!")
     except Exception as e:
-        await status_msg.edit_text(f"⚠️ Voice Transcription Error: {str(e)[:60]}", parse_mode="HTML")
+        await status_msg.edit_text(f"⚠️ Voice Error: {str(e)[:60]}", parse_mode="HTML")
 
 # 9. Dynamic Text Processing & Cross Bridge
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
