@@ -2,12 +2,10 @@ import os
 import re
 import io
 import asyncio
-import tempfile
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
-from pydub import AudioSegment
 from telegram import (
     Update,
     LabeledPrice,
@@ -308,7 +306,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Foolproof Pydub-Converted Voice Handler
+# 8. Direct Memory-Based Voice Handler (No FFmpeg Needed)
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
         return
@@ -324,28 +322,25 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not voice:
         return
 
-    status_msg = await update.message.reply_text("<i>Processing voice note via FFmpeg... 🎙️</i>", parse_mode="HTML")
-    
-    input_file = tempfile.NamedTemporaryFile(delete=False, suffix=".oga").name
-    output_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
+    status_msg = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
 
     try:
         tg_file = await context.bot.get_file(voice.file_id)
-        await tg_file.download_to_drive(input_file)
+        buf = io.BytesIO()
+        await tg_file.download_to_memory(buf)
+        buf.seek(0)
+        audio_bytes = buf.read()
 
-        # Convert Telegram OGA/OGG to standard MP3 using Pydub & FFmpeg
-        def _convert_and_transcribe():
-            audio = AudioSegment.from_file(input_file)
-            audio.export(output_file, format="mp3")
+        if len(audio_bytes) < 50:
+            await status_msg.edit_text("⚠️ Voice recording too short.")
+            return
 
+        def _transcribe():
             client = Groq(api_key=GROQ_API_KEY)
-            with open(output_file, "rb") as f:
-                audio_bytes = f.read()
-
             for model_candidate in ["whisper-large-v3", "whisper-large-v3-turbo"]:
                 try:
                     res = client.audio.transcriptions.create(
-                        file=("audio.mp3", audio_bytes, "audio/mp3"),
+                        file=("audio.ogg", audio_bytes, "audio/ogg"),
                         model=model_candidate
                     )
                     if res and res.text:
@@ -354,21 +349,16 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     continue
             return ""
 
-        spoken_text = await asyncio.to_thread(_convert_and_transcribe)
+        spoken_text = await asyncio.to_thread(_transcribe)
         await status_msg.delete()
 
         if spoken_text:
             update.message.text = spoken_text
             await handle_text(update, context)
         else:
-            await update.message.reply_text("⚠️ Could not detect speech clearly in the voice note.")
+            await update.message.reply_text("⚠️ Could not recognize speech. Please speak clearly!")
     except Exception as e:
-        await status_msg.edit_text(f"⚠️ Voice Conversion Error: {str(e)[:60]}", parse_mode="HTML")
-    finally:
-        for path in [input_file, output_file]:
-            if os.path.exists(path):
-                try: os.remove(path)
-                except Exception: pass
+        await status_msg.edit_text(f"⚠️ Voice Error: {str(e)[:60]}", parse_mode="HTML")
 
 # 9. Dynamic Text Processing & Cross Bridge
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
