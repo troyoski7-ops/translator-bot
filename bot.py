@@ -88,7 +88,7 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Dynamic Groq AI Engine with Instant Language Shift Detection
+# 5. Updated Groq Engine (Active Models Only)
 def _sync_groq_call(text, recent_languages=None, is_group=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is not configured in Render!"}
@@ -102,8 +102,8 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
             "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
             f"{lang_context}\n"
             "Rules:\n"
-            "1. Accurately detect the current message's source language on the fly (it may change dynamically).\n"
-            "2. If users change languages abruptly, adapt instantly and cross-translate to the alternate active language in the conversation.\n"
+            "1. Accurately detect the current message's source language on the fly.\n"
+            "2. Adapt instantly to language shifts and cross-translate.\n"
             "3. Output MUST strictly contain these 6 lines with exact prefixes:\n"
             "SRC: [Detected Source Language Name]\n"
             "TRG: [Target Language Name]\n"
@@ -129,7 +129,8 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama3-70b-8192"]
+    # Using active and non-deprecated models
+    models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
     
     last_error_msg = ""
     for model_id in models_to_try:
@@ -362,10 +363,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     native_p = res.get("native_p", "")
     latin_p = res.get("latin_p", "")
 
-    # Automatically track language shifts for group continuity
     if src_lang not in recent_langs:
         recent_langs.append(src_lang)
-        if len(recent_langs) > 4:  # Keep only the 4 most recent active languages
+        if len(recent_langs) > 4:
             recent_langs.pop(0)
 
     if not is_vip:
