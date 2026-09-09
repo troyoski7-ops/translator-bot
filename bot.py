@@ -125,7 +125,7 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
 
     try:
         completion = client.chat.completions.create(
-            model="gemma2-9b-it",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_prompt}
@@ -551,7 +551,6 @@ async def main():
         pass
         
     await app.start()
-    # FIXED: Added await here so polling starts correctly without warnings
     await app.updater.start_polling(drop_pending_updates=True)
 
     stop_event = asyncio.Event()
