@@ -123,8 +123,8 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    # ഒന്നിലധികം സ്റ്റേബിൾ ആയ മോഡലുകൾ (Auto Fallback)
-    models_to_try = ["openai/gpt-oss-20b", "llama-3.1-8b-instant", "mixtral-8x7b-32768"]
+    # പൂർണ്ണമായും ഉറപ്പുള്ള ആക്ടീവ് മോഡൽ മാത്രം
+    models_to_try = ["llama-3.1-8b-instant"]
     last_error = ""
 
     for model_name in models_to_try:
