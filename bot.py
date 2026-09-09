@@ -87,10 +87,10 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Robust Groq AI Translation Engine
+# 5. Verified Active Groq Models Only
 def _sync_groq_call(text, target_hint, is_solo=False):
     if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY is not set in Render Environment Variables!"}
+        return {"error": "GROQ_API_KEY is missing in Render Environment Variables!"}
 
     client = Groq(api_key=GROQ_API_KEY)
 
@@ -103,7 +103,7 @@ def _sync_groq_call(text, target_hint, is_solo=False):
         "3. In SOLO mode with no target:\n"
         "   - Malayalam -> English\n"
         "   - English -> Malayalam (or Persian/German)\n"
-        "   - Any foreign language (German, Italian, Russian, Chinese, Persian, etc.) -> English\n"
+        "   - Any foreign language -> English\n"
         "4. In GROUP mode, translate to Partner's language.\n"
         "5. NEVER output template placeholders like '[SOURCE LANGUAGE]'.\n"
         "6. Always provide English Meaning, Target Script Phonetics, and Latin English Transliteration.\n\n"
@@ -118,10 +118,10 @@ def _sync_groq_call(text, target_hint, is_solo=False):
 
     user_prompt = f"Message: \"{text}\"\nTarget Requirement: {target_hint or ('Auto-Solo' if is_solo else 'Auto-Group')}"
 
+    # Active production models on Groq
     models_to_try = [
         "llama-3.3-70b-versatile",
-        "llama-3.1-70b-versatile",
-        "mixtral-8x7b-32768"
+        "llama-3.1-8b-instant"
     ]
 
     last_error_msg = ""
@@ -203,7 +203,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start in Clean English
+# 7. Start Command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -225,7 +225,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎨 /theme • Change animation | 📊 /status • Check quota\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • Star VIP Store\n\n"
-        "Send any text or voice note to begin chatting!"
+        "Send any text or voice note to begin!"
     )
     try:
         await update.message.reply_animation(animation=active_theme["url"], caption=welcome, parse_mode="HTML")
@@ -423,7 +423,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 10. Dual-Engine Audio Player (Edge-TTS + gTTS Auto-Fallback)
+# 10. Dual-Engine Audio Player
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎙️ Generating native speech...")
