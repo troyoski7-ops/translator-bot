@@ -204,17 +204,17 @@ def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: str):
 
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "⭐️ <b>STAR VIP STORE & VAULT</b> ⭐️\n\n"
+        "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
         "Free translation quota exhausted!\n\n"
-        "• Unlimited Automatic Translations (Group & Solo)\n"
+        "• Unlimited Text Translations (Group & Solo)\n"
         "• High-Definition Audio Pronunciations with 0.75x Slow-Motion\n"
-        "• Secret VIP Luxury Themes\n\n"
+        "• Secret VIP Luxury Themes & Custom Backgrounds\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
         "• <b>3 Months ELITE:</b> 120 Stars <i>(20% Off)</i>\n"
         "• <b>1 Year LEGEND:</b> 399 Stars <i>(Best Value!)</i>"
     )
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("⭐️ 1 Month (50 Stars)", callback_data="buy_sub_1m")],
+        [InlineKeyboardButton("🔥 1 Month (50 Stars)", callback_data="buy_sub_1m")],
         [InlineKeyboardButton("💎 3 Months (120 Stars)", callback_data="buy_sub_3m")],
         [InlineKeyboardButton("👑 1 Year LEGEND (399 Stars)", callback_data="buy_sub_1y")],
     ])
@@ -223,36 +223,39 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start Command
+# 7. Start Command (Updated: Text-Only Architecture Focus)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
     _, _, is_vip = is_user_active(context, user_id)
 
+    custom_bg = context.chat_data.get("user_custom_bg", {}).get(user_id)
     selected_theme = context.chat_data.get("user_theme", {}).get(user_id, "chibi")
     active_theme = ALL_THEMES.get(selected_theme, STANDARD_THEMES["chibi"])
-    vip_badge = "👑 <b>VIP PRIVILEGES ACTIVE</b>\n" if is_vip else ""
+    
+    bg_url = custom_bg if (custom_bg and is_vip) else active_theme["url"]
+    vip_badge = "🌟 <b>VIP HOLOGRAPHIC SHIELD ACTIVE</b>\n" if is_vip else ""
 
     welcome = (
-        f"🌐 <b>SMART TRANSLATOR & LIVE DIALOGUE BRIDGE</b>\n"
+        f"🌌 <b>QUANTUM POLYGLOT NEURAL BRIDGE</b> 🌌\n"
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
-        "👤 <b>1. In Personal Chat (Solo Tutor & Translator):</b>\n"
-        "• Send any word, sentence, or voice note in any language.\n"
-        "• Get instant meanings, complete dual phonetics, and native audio.\n\n"
-        "👥 <b>2. In Group Chat (100% Automatic Live Interpreter):</b>\n"
+        "👤 <b>1. Personal Chat (Solo Tutor & Translator):</b>\n"
+        "• Send any text, word, or sentence in any language.\n"
+        "• Get instant meanings, dynamic card UI, dual phonetics, and native HD audio (`🔊 Listen`).\n\n"
+        "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
         "• Add this bot to any group chat!\n"
-        "• When members chat in different languages, the bot <b>automatically cross-translates</b> without any manual reset.\n\n"
-        "🎙 <b>Voice Input:</b> Hold the mic button and send a voice note.\n\n"
+        "• Cross-translates multi-lingual text conversations on the fly.\n\n"
         "<b>Commands:</b>\n"
-        "🎨 /theme • Change start animation\n"
-        "📊 /status • Check quota & VIP status\n"
+        "🎨 /theme • Holographic UI Theme\n"
+        "🖼 /custombg [URL] • Set Custom VIP Background GIF\n"
+        "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
-        "⭐️ /premium • Star VIP Store\n\n"
-        "Send any text or voice note to begin!"
+        "⭐️ /premium • VIP Vault\n\n"
+        "Send any text to begin your quantum session!"
     )
     try:
-        await update.message.reply_animation(animation=active_theme["url"], caption=welcome, parse_mode="HTML")
+        await update.message.reply_animation(animation=bg_url, caption=welcome, parse_mode="HTML")
     except Exception:
         await update.message.reply_text(welcome, parse_mode="HTML")
 
@@ -265,7 +268,7 @@ async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for key, item in PREMIUM_THEMES.items():
         label = f"✨ {item['label']}" if is_vip else f"🔒 {item['label']} [VIP]"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"settheme_{key}")])
-    await update.message.reply_text("🎨 <b>Select Screen Theme:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text("🎨 <b>Select Holographic Theme:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -277,97 +280,68 @@ async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT
     selected = ALL_THEMES.get(theme_key)
     if not selected: return
     if selected.get("vip") and not is_vip:
-        await query.answer("🔒 VIP Theme! Upgrade with Stars to unlock.", show_alert=True)
+        await query.answer("🔒 VIP Locked! Upgrade with Telegram Stars.", show_alert=True)
         return
     if "user_theme" not in context.chat_data: context.chat_data["user_theme"] = {}
     context.chat_data["user_theme"][user_id] = theme_key
-    await query.edit_message_text(f"✅ Active theme set to:\n{selected['label']}")
+    await query.edit_message_text(f"✨ Holographic theme updated to:\n<b>{selected['label']}</b>", parse_mode="HTML")
+
+async def custom_bg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    _, _, is_vip = is_user_active(context, user_id)
+    
+    if not is_vip:
+        await update.message.reply_text("🔒 <b>VIP Exclusive Feature!</b>\n\nCustom background GIFs are unlocked only for VIP/Legend subscribers. Use /premium to upgrade!", parse_mode="HTML")
+        return
+
+    args = context.args
+    if not args:
+        await update.message.reply_text(
+            "🖼 <b>Custom Background Setup (VIP)</b>\n\n"
+            "Usage: <code>/custombg [GIF / Animation URL]</code>\n"
+            "Example: <code>/custombg https://media.giphy.com/media/...</code>",
+            parse_mode="HTML"
+        )
+        return
+    
+    custom_url = args[0]
+    if "user_custom_bg" not in context.chat_data:
+        context.chat_data["user_custom_bg"] = {}
+        
+    context.chat_data["user_custom_bg"][user_id] = custom_url
+    await update.message.reply_text("✅ <b>Custom VIP Background GIF successfully saved!</b> Use /start to see your new welcome animation.", parse_mode="HTML")
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     _, status_val, _ = is_user_active(context, user_id)
-    state = "⏸ Paused" if context.chat_data.get("paused", False) else "▶️ Active"
+    state = "⏸ Paused" if context.chat_data.get("paused", False) else "🟢 Online & Syncing"
     await update.message.reply_text(
-        f"📊 <b>STATUS</b>\n\n"
-        f"🏃 Usage Quota: {status_val}\n"
-        f"🔄 State: {state}\n\n"
-        f"<i>Unlock unlimited usage & VIP themes with /premium</i>",
+        f"📊 <b>CORE STATUS</b>\n\n"
+        f"🔋 Neural Quota: {status_val}\n"
+        f"⚡ Bridge State: {state}\n\n"
+        f"<i>Unlock unlimited bandwidth & custom themes via /premium</i>",
         parse_mode="HTML"
     )
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = True
-    await update.message.reply_text("⏸ <b>Translations Paused!</b> Send /resume to continue.", parse_mode="HTML")
+    await update.message.reply_text("⏸ <b>Neural Bridge Paused!</b> Send /resume to reactivate.", parse_mode="HTML")
 
 async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
-    await update.message.reply_text("▶️ <b>Translations Resumed!</b> Listening 🏃💨", parse_mode="HTML")
+    await update.message.reply_text("▶️ <b>Neural Bridge Resumed!</b> Synchronizing ⚡", parse_mode="HTML")
 
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Direct Memory-Based Voice Handler (No FFmpeg Needed)
-async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.chat_data.get("paused", False):
-        return
-
-    user = update.effective_user
-    user_id = str(user.id)
-    active, status_val, is_vip = is_user_active(context, user_id)
-    if not active:
-        await send_store_menu(update.effective_chat.id, context)
-        return
-
-    voice = update.message.voice or update.message.audio
-    if not voice:
-        return
-
-    status_msg = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
-
-    try:
-        tg_file = await context.bot.get_file(voice.file_id)
-        buf = io.BytesIO()
-        await tg_file.download_to_memory(buf)
-        buf.seek(0)
-        audio_bytes = buf.read()
-
-        if len(audio_bytes) < 50:
-            await status_msg.edit_text("⚠️ Voice recording too short.")
-            return
-
-        def _transcribe():
-            client = Groq(api_key=GROQ_API_KEY)
-            for model_candidate in ["whisper-large-v3", "whisper-large-v3-turbo"]:
-                try:
-                    res = client.audio.transcriptions.create(
-                        file=("audio.ogg", audio_bytes, "audio/ogg"),
-                        model=model_candidate
-                    )
-                    if res and res.text:
-                        return res.text.strip()
-                except Exception:
-                    continue
-            return ""
-
-        spoken_text = await asyncio.to_thread(_transcribe)
-        await status_msg.delete()
-
-        if spoken_text:
-            update.message.text = spoken_text
-            await handle_text(update, context)
-        else:
-            await update.message.reply_text("⚠️ Could not recognize speech. Please speak clearly!")
-    except Exception as e:
-        await status_msg.edit_text(f"⚠️ Voice Error: {str(e)[:60]}", parse_mode="HTML")
-
-# 9. Dynamic Text Processing & Cross Bridge
+# 8. Animated Visual Card Engine (Text Input Only)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
         return
 
     user = update.effective_user
     user_id = str(user.id)
-    user_name = user.first_name or "User"
+    user_name = user.first_name or "Operator"
 
     active, status_val, is_vip = is_user_active(context, user_id)
     if not active:
@@ -375,7 +349,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = update.message.text.strip()
-    placeholder = await update.message.reply_text("<i>Translating... 🏃</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("⚡ <i>Synthesizing Neural Translation...</i>", parse_mode="HTML")
 
     chat_type = update.effective_chat.type
     is_group = chat_type in ["group", "supergroup"]
@@ -394,7 +368,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     res = await execute_translation(text, partner_target, is_group=is_group)
 
     if "error" in res:
-        await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
+        await placeholder.edit_text(f"⚠️ <b>Neural Error:</b> {res['error']}", parse_mode="HTML")
         return
 
     src_lang = res.get("src", "Detected")
@@ -417,30 +391,33 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     active_theme = ALL_THEMES.get(user_theme_key, STANDARD_THEMES["chibi"])
 
     if is_vip and active_theme.get("vip"):
-        vip_header = f"<b>{active_theme.get('badge')}</b>\n"
+        vip_header = f"🔮 <b>{active_theme.get('badge')}</b>\n"
         quote_symbol = active_theme.get("quote_prefix", "✨ ")
-        status_line = f"👑 <b>VIP Priority</b> • {status_val}"
+        status_line = f"💎 <b>Quantum Priority</b> • {status_val}"
     else:
         vip_header = ""
-        quote_symbol = ""
-        status_line = f"🏃 Status: {status_val}"
+        quote_symbol = "💬 "
+        status_line = f"🔋 Quota: {status_val}"
 
-    native_block = f"🗣 <i>Phonetic ({trg_lang}):</i> <code>{native_p}</code>\n" if native_p else ""
-    latin_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
-    meaning_block = f"📖 <i>Meaning (EN):</i> {meaning_en}\n" if meaning_en else ""
+    native_block = f"🗣 <i>Phonetic Script ({trg_lang}):</i>\n<code>{native_p}</code>\n" if native_p else ""
+    latin_block = f"🔤 <i>Phonetic Alphabet:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
+    meaning_block = f"📖 <i>Contextual Meaning:</i> <b>{meaning_en}</b>\n" if meaning_en else ""
 
-    mode_label = "👥 Group Live Bridge" if is_group else "👤 Personal Tutor"
+    mode_label = "🌐 Group Live Neural Bridge" if is_group else "💠 Personal Neural Tutor"
 
     card_text = (
         f"{vip_header}"
-        f"👤 <b>{user_name}</b> ({mode_label})\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
-        f"📍 <i>{src_info['loc']} ⇄ {trg_info['loc']}</i>\n\n"
-        f"<blockquote>{quote_symbol}{translation}</blockquote>"
+        f"👤 <b>{user_name}</b> ➔ <i>{mode_label}</i>\n"
+        f"────────────────────────\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code>  <b>⚡ SYNC ⚡</b>  {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
+        f"📍 <i>{src_info['loc']}</i> ⟷ <i>{trg_info['loc']}</i>\n"
+        f"────────────────────────\n\n"
+        f"<blockquote>{quote_symbol}<b>{translation}</b></blockquote>\n\n"
         f"{native_block}"
         f"{latin_block}"
         f"{meaning_block}\n"
-        f"{status_line}"
+        f"────────────────────────\n"
+        f"⚡ {status_line}"
     )
 
     msg_id = placeholder.message_id
@@ -455,14 +432,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(f"🔊 Listen ({trg_info['flag']} {trg_lang})", callback_data=f"play_{msg_id}")]
     ]
     if is_vip:
-        keyboard.append([InlineKeyboardButton("🐢 Slow-Mo (0.75x)", callback_data=f"slow_{msg_id}")])
+        keyboard.append([InlineKeyboardButton("🐢 Slow-Mo Matrix (0.75x)", callback_data=f"slow_{msg_id}")])
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 10. Reliable Working Audio Delivery
+# 9. HD Audio Synthesis Engine
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🎙️ Generating audio...")
+    await query.answer("🎧 Synthesizing HD Audio Stream...")
     data = query.data
 
     is_slow = data.startswith("slow_")
@@ -479,8 +456,8 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rate_str = "-25%" if is_slow else "+0%"
 
     temp_audio_file = f"speech_{msg_id}.mp3"
-    speed_label = "Slowed" if is_slow else "Native"
-    caption = f"🔊 <b>{speed_label} Pronunciation ({cache['lang']}):</b>\n<i>\"{text_to_speak}\"</i>"
+    speed_label = "Slow-Mo Matrix" if is_slow else "HD Native"
+    caption = f"🔊 <b>{speed_label} Audio Stream ({cache['lang']}):</b>\n<i>\"{text_to_speak}\"</i>"
 
     try:
         worked = False
@@ -504,7 +481,7 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=query.message.chat_id,
                 audio=audio,
                 title=f"{cache['lang']} Pronunciation",
-                performer="Translator Bridge",
+                performer="Quantum Neural Bridge",
                 caption=caption,
                 parse_mode="HTML"
             )
@@ -512,14 +489,14 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await context.bot.send_message(
             chat_id=query.message.chat_id,
-            text=f"⚠️ Audio playback error: {str(e)[:60]}"
+            text=f"⚠️ Audio error: {str(e)[:60]}"
         )
     finally:
         if os.path.exists(temp_audio_file):
             try: os.remove(temp_audio_file)
             except Exception: pass
 
-# 11. Star Payments
+# 10. Star Payments
 async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -556,19 +533,20 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     context.chat_data["premium_expiry"][user_id] = new_expiry.isoformat()
     context.chat_data["vip_tier"][user_id] = plan["badge"]
 
-    gift_text = f"🎁 <b>VIP UNLOCKED!</b> ⭐️\n\n👑 <b>Tier:</b> {plan['name']}\n💎 <b>Badge:</b> {plan['badge']}"
+    gift_text = f"🎁 <b>VIP HOLOGRAPHIC PASS UNLOCKED!</b> ⭐️\n\n👑 <b>Tier:</b> {plan['name']}\n💎 <b>Badge:</b> {plan['badge']}"
     try:
         await update.message.reply_animation(animation=VIP_GIFT_STICKER, caption=gift_text, parse_mode="HTML")
     except Exception:
         await update.message.reply_text(gift_text, parse_mode="HTML")
 
-# 12. Run Engine
+# 11. Run Engine
 async def run_bot():
     await start_web_server()
 
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("theme", theme_command))
+    app.add_handler(CommandHandler("custombg", custom_bg_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("resume", resume_command))
@@ -579,14 +557,13 @@ async def run_bot():
     app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^(play_|slow_)"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
     await app.initialize()
     try: await app.bot.delete_webhook(drop_pending_updates=True)
     except Exception: pass
-    await app.start()
+    app.start()
 
     while True:
         try:
