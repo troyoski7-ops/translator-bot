@@ -128,7 +128,6 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    # Safe multi-model fallback check to prevent any 404 Model Not Found errors
     models_to_try = ["gemma2-9b-it", "mixtral-8x7b-32768", "llama-3.1-8b-instant"]
     try:
         m_list = client.models.list()
@@ -538,14 +537,14 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     base_time = datetime.fromisoformat(current_expiry_str) if current_expiry_str and datetime.fromisoformat(current_expiry_str) > now else now
 
     new_expiry = base_time + timedelta(days=plan["days"])
-    context.chat_data["premium_expiry"][user_id] = new_expiry.isoformat()
+    context.post_expiry = context.chat_data["premium_expiry"][user_id] = new_expiry.isoformat()
     context.chat_data["vip_tier"][user_id] = plan["badge"]
 
     gift_text = f"🎁 <b>VIP HOLOGRAPHIC PASS UNLOCKED!</b> ⭐️\n\n👑 <b>Tier:</b> {plan['name']}\n💎 <b>Badge:</b> {plan['badge']}"
     try:
         await update.message.reply_animation(animation=VIP_GIFT_STICKER, caption=gift_text, parse_mode="HTML")
     except Exception:
-        await update.message.reply_text(gift_text, parse_-mode="HTML")
+        await update.message.reply_text(gift_text, parse_mode="HTML")
 
 # 11. Run Engine
 async def main():
@@ -578,7 +577,7 @@ async def main():
     await app.start()
     app.updater.start_polling(drop_pending_updates=True)
 
-    stop_event = asyncio.Event()
+    stop_event = async_event = asyncio.Event()
     await stop_event.wait()
 
 if __name__ == "__main__":
