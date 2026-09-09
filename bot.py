@@ -3,6 +3,16 @@ import re
 import io
 import time
 import asyncio
+import subprocess
+import sys
+
+# ആവശ്യമായ ലൈബ്രറി ഓട്ടോമാറ്റിക് ആയി ഇൻസ്റ്റാൾ ചെയ്യാൻ
+try:
+    import google.generativeai as genai
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "google-generativeai"])
+    import google.generativeai as genai
+
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
@@ -22,13 +32,11 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-import google.generativeai as genai
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 RAW_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_API_KEY = re.sub(r'\s+', '', RAW_GEMINI_KEY)
 
-# Initialize genai with the API key directly
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
