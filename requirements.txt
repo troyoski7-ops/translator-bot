@@ -1,7 +1,7 @@
+google-genai
 python-telegram-bot
-groq
+gTTS
 edge-tts
-gtts
 aiohttp
 
 
