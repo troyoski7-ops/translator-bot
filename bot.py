@@ -123,38 +123,28 @@ def _sync_gemini_call(text, recent_languages=None, is_group=False):
         )
         prompt = f"{system_instruction}\n\nMessage: \"{text}\""
 
-    # Retry logic for 503 / High demand errors
-    import time
-    max_retries = 3
-    last_error = ""
+    try:
+        response = client.models.generate_content(
+            model='gemini-3.6-flash',
+            contents=prompt,
+        )
+        raw = response.text.strip()
+        parsed = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+            elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+            elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
 
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model='gemini-3.6-flash',
-                contents=prompt,
-            )
-            raw = response.text.strip()
-            parsed = {}
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
-
-            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
-                return parsed
-        except Exception as e:
-            last_error = str(e)
-            if "503" in last_error or "unavailable" in last_error.lower():
-                time.sleep(2) # Wait 2 seconds before retry
-                continue
-            break
-
-    return {"error": f"Gemini Error: {last_error}"}
+        if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
+            return parsed
+        else:
+            return {"error": "Gemini returned invalid format."}
+    except Exception as e:
+        return {"error": f"Gemini Error: {str(e)}"}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_gemini_call, text, recent_languages, is_group)
@@ -467,11 +457,9 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.to_thread(_generate_gtts)
 
         with open(temp_audio_file, "rb") as audio:
-            await context.bot.send_audio(
+            await context.bot.send_voice(
                 chat_id=query.message.chat_id,
-                audio=audio,
-                title=f"{cache['lang']} Pronunciation",
-                performer="Quantum Neural Bridge",
+                voice=audio,
                 caption=caption,
                 parse_mode="HTML"
             )
@@ -542,8 +530,8 @@ async def main():
     app.add_handler(CommandHandler("premium", premium_command))
 
     app.add_handler(CallbackQueryHandler(plan_selection_callback, pattern="^buy_"))
-    app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
     app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^(play_|slow_)"))
+    app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
