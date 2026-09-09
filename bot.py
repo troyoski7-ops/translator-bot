@@ -29,7 +29,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 # 2. Render Keep-Alive Server
 async def handle_ping(request):
-    return web.Response(text="Universal Polyglot Bridge Live & Dual-Mode Active!")
+    return web.Response(text="Translator Bridge Core Live!")
 
 async def start_web_server():
     app = web.Application()
@@ -41,7 +41,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Themes: 4 Free + VIP Luxury Vault
+# 3. Verified Animations
 STANDARD_THEMES = {
     "chibi": {"label": "🎀 Chibi Anime Girl", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
     "doge": {"label": "🐕 Thinking Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
@@ -52,15 +52,13 @@ STANDARD_THEMES = {
 PREMIUM_THEMES = {
     "vip_gold": {"label": "👑 Royal Gold VIP", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "quote_prefix": "👑 ", "vip": True},
     "vip_cyber": {"label": "🐉 Cyber Tokyo Neon", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBER MATRIX VIP ⚡", "quote_prefix": "🔮 ", "vip": True},
-    "vip_matrix": {"label": "⚡ Quantum Matrix Core", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "✨ ASTRAL HORIZON ✨", "quote_prefix": "🪐 ", "vip": True},
-    "vip_sound": {"label": "🎧 Hologram Soundwaves", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "quote_prefix": "❄️ ", "vip": True}
 }
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
 ANIM_STORE_URL = "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
-# 4. Regional Voice & Country Flag Registry
+# 4. Regional Voice & Flag Registry
 VOICE_MAP = {
     "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
     "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
@@ -73,10 +71,8 @@ VOICE_MAP = {
     "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "loc": "London"},
     "tajik": {"edge": "tg-TJ-GanjinaNeural", "gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
     "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
-    "azeri": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
     "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
     "uzbek": {"edge": "uz-UZ-MadinaNeural", "gtts": "uz", "flag": "🇺🇿", "loc": "Tashkent"},
-    "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "loc": "Astana"},
     "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
     "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
     "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
@@ -91,39 +87,44 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Dynamic Dual-Mode Translation Engine (Group vs Solo DM)
+# 5. Robust Groq AI Translation Engine
 def _sync_groq_call(text, target_hint, is_solo=False):
     if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY missing! Configure it in Render Environment Variables."}
+        return {"error": "GROQ_API_KEY is not set in Render Environment Variables!"}
 
     client = Groq(api_key=GROQ_API_KEY)
 
     system_instruction = (
-        "You are an infallible universal language translator and pronunciation tutor.\n"
-        f"Mode: {'SOLO PERSONAL ASSISTANT' if is_solo else 'GROUP LIVE DIALOGUE INTERPRETER'}\n\n"
-        "Translation Rules:\n"
-        "1. Detect the source language of the input text accurately.\n"
-        "2. If Target Requirement is provided and different from source, translate into it.\n"
-        "3. If in SOLO mode and no target specified:\n"
-        "   - If input is Malayalam -> Target is English\n"
-        "   - If input is English -> Target is Malayalam (or Persian/German)\n"
-        "   - If input is foreign (German, Italian, Russian, Chinese, Persian, etc.) -> Target is English\n"
-        "4. If in GROUP mode and partner language is provided, translate into Partner's language.\n"
-        "5. NEVER output template brackets like '[SOURCE LANGUAGE]'. Output authentic translations only.\n"
-        "6. Provide English Meaning, Native Script Phonetics, and Latin English Transliteration.\n\n"
-        "Strictly output these 6 lines only:\n"
+        "You are an infallible real-time polyglot translation interpreter.\n"
+        f"Mode: {'SOLO PERSONAL ASSISTANT' if is_solo else 'GROUP LIVE INTERPRETER'}\n\n"
+        "Rules:\n"
+        "1. Accurately detect the input text language.\n"
+        "2. If Target Requirement is provided and different, translate into it.\n"
+        "3. In SOLO mode with no target:\n"
+        "   - Malayalam -> English\n"
+        "   - English -> Malayalam (or Persian/German)\n"
+        "   - Any foreign language (German, Italian, Russian, Chinese, Persian, etc.) -> English\n"
+        "4. In GROUP mode, translate to Partner's language.\n"
+        "5. NEVER output template placeholders like '[SOURCE LANGUAGE]'.\n"
+        "6. Always provide English Meaning, Target Script Phonetics, and Latin English Transliteration.\n\n"
+        "Strictly format response as these 6 lines only:\n"
         "SRC: Source Language Name\n"
         "TRG: Target Language Name\n"
-        "TRANS: Full translation in target language\n"
-        "MEANING: Clear English meaning of sentence\n"
-        "NATIVE_P: Native script phonetic pronunciation helper (e.g. Pinyin for Chinese, Kana for Japanese)\n"
-        "LATIN_P: Latin English alphabet pronunciation helper (e.g. Romaji for Japanese)"
+        "TRANS: Full translation text\n"
+        "MEANING: English meaning\n"
+        "NATIVE_P: Native script phonetic pronunciation helper\n"
+        "LATIN_P: Latin English alphabet pronunciation helper"
     )
 
     user_prompt = f"Message: \"{text}\"\nTarget Requirement: {target_hint or ('Auto-Solo' if is_solo else 'Auto-Group')}"
 
-    models_to_try = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+    models_to_try = [
+        "llama-3.3-70b-versatile",
+        "llama-3.1-70b-versatile",
+        "mixtral-8x7b-32768"
+    ]
 
+    last_error_msg = ""
     for model_id in models_to_try:
         try:
             completion = client.chat.completions.create(
@@ -148,15 +149,16 @@ def _sync_groq_call(text, target_hint, is_solo=False):
 
             if parsed.get("trans") and "[" not in parsed.get("trans", ""):
                 return parsed
-        except Exception:
+        except Exception as e:
+            last_error_msg = str(e)
             continue
 
-    return {"error": "Translation engine unreachable."}
+    return {"error": f"Groq Error: {last_error_msg}"}
 
 async def execute_translation(text, target_hint=None, is_solo=False):
     return await asyncio.to_thread(_sync_groq_call, text, target_hint, is_solo)
 
-# 6. Quotas & Subscriptions
+# 6. Quota & VIP Logic
 FREE_LIMIT = 100
 PLANS = {
     "sub_1m": {"name": "1 Month VIP", "days": 30, "stars": 50, "badge": "⭐️ VIP"},
@@ -184,7 +186,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⭐️ <b>STAR VIP STORE & VAULT</b> ⭐️\n\n"
         "Free translation quota exhausted!\n\n"
-        "• Unlimited 2-Way Group & Solo Translations\n"
+        "• Unlimited Automatic 2-Way Translations\n"
         "• Dual Voice Audio with 0.75x Slow-Motion\n"
         "• Secret VIP Luxury Themes\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
@@ -217,13 +219,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 👥 <b>Group Mode</b>: Live 2-way cross translation between any two users.\n"
         "• 👤 <b>Solo Mode</b>: Personal language tutor (study German, Persian, Italian, Chinese, etc.).\n"
         "• 🎙 <b>Voice Input</b>: Tap the mic and talk in any language!\n"
-        "• 🗣 <b>Dual Phonetics</b>: Native script and English transliteration.\n"
+        "• 🗣 <b>Dual Phonetics</b>: Native script phonetics & English Latin transliteration.\n"
         "• 🔊 <b>Tap to Listen</b>: Crystal-clear native audio playback.\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Change animation | 📊 /status • Check quota\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • Star VIP Store\n\n"
-        "Send any text or voice note to begin!"
+        "Send any text or voice note to begin chatting!"
     )
     try:
         await update.message.reply_animation(animation=active_theme["url"], caption=welcome, parse_mode="HTML")
@@ -296,7 +298,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not voice:
         return
 
-    status_msg = await update.message.reply_text("<i>Listening to audio note... 🎙️</i>", parse_mode="HTML")
+    status_msg = await update.message.reply_text("<i>Listening to voice note... 🎙️</i>", parse_mode="HTML")
     file = await context.bot.get_file(voice.file_id)
 
     buf = io.BytesIO()
@@ -339,7 +341,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     placeholder = await update.message.reply_text("<i>Translating... 🏃</i>", parse_mode="HTML")
 
-    # Check if this is a Solo Private Chat or a Group Chat
     chat_type = update.effective_chat.type
     is_solo = chat_type == "private"
 
@@ -348,12 +349,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_langs = context.chat_data["user_langs"]
 
-    # In groups: Partner is the most recent other speaker
     if not is_solo:
         other_users = [uid for uid in user_langs if uid != user_id]
         partner_target = user_langs[other_users[-1]] if other_users else None
     else:
-        # In solo mode: No fixed partner, dynamic auto tutor routing
         partner_target = None
 
     res = await execute_translation(text, partner_target, is_solo=is_solo)
@@ -369,7 +368,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     native_p = res.get("native_p", "")
     latin_p = res.get("latin_p", "")
 
-    # Save user's detected language dynamically
     user_langs[user_id] = src_lang
 
     if not is_vip:
@@ -391,7 +389,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quote_symbol = ""
         status_line = f"🏃 Status: {status_val}"
 
-    # Linguistic Helper Blocks
     native_block = f"🗣 <i>Phonetic ({trg_lang}):</i> <code>{native_p}</code>\n" if native_p else ""
     latin_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
     meaning_block = f"📖 <i>Meaning (EN):</i> {meaning_en}\n" if meaning_en else ""
@@ -448,7 +445,6 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     audio_buf = io.BytesIO()
     worked = False
 
-    # Attempt 1: Microsoft Edge Neural Voice
     if voice_edge:
         try:
             communicate = edge_tts.Communicate(text_to_speak, voice_edge, rate=rate_str)
@@ -461,7 +457,6 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             worked = False
 
-    # Attempt 2: Auto Fallback to Google TTS
     if not worked:
         try:
             def _gtts_task():
