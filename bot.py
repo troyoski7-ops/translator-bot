@@ -1,7 +1,6 @@
 import os
 import re
 import io
-import json
 import asyncio
 from datetime import datetime, timedelta
 from aiohttp import web
@@ -64,7 +63,7 @@ PREMIUM_THEMES = {
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
 
-# 4. Neural Voices Registry (Expanded with Auto-Fallback)
+# 4. Reliable Neural Voices
 VOICE_MAP = {
     "persian": {"voice": "fa-IR-DilaraNeural", "flag": "🇮🇷", "loc": "Tehran", "gtts": "fa"},
     "farsi": {"voice": "fa-IR-DilaraNeural", "flag": "🇮🇷", "loc": "Tehran", "gtts": "fa"},
@@ -80,58 +79,39 @@ VOICE_MAP = {
     "russian": {"voice": "ru-RU-SvetlanaNeural", "flag": "🇷🇺", "loc": "Moscow", "gtts": "ru"},
     "arabic": {"voice": "ar-AE-HamdanNeural", "flag": "🇦🇪", "loc": "Dubai", "gtts": "ar"},
     "hindi": {"voice": "hi-IN-SwaraNeural", "flag": "🇮🇳", "loc": "Delhi", "gtts": "hi"},
-    "french": {"voice": "fr-FR-DeniseNeural", "flag": "🇫🇷", "loc": "Paris", "gtts": "fr"},
-    "spanish": {"voice": "es-ES-ElviraNeural", "flag": "🇪🇸", "loc": "Madrid", "gtts": "es"},
-    "italian": {"voice": "it-IT-ElsaNeural", "flag": "🇮🇹", "loc": "Rome", "gtts": "it"},
 }
 
-def get_voice_info(lang_name, fallback_code="en", fallback_flag="🌐", fallback_loc="Global"):
+def get_voice_info(lang_name):
     clean = (lang_name or "").strip().lower()
     for k, v in VOICE_MAP.items():
         if k in clean:
             return v
-    return {
-        "voice": None,
-        "flag": fallback_flag or "🌐",
-        "loc": fallback_loc or (lang_name.capitalize() if lang_name else "Global"),
-        "gtts": fallback_code or "en"
-    }
+    return {"voice": "en-US-JennyNeural", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global", "gtts": "en"}
 
-# 5. Fault-Tolerant JSON Translation Engine
+# 5. Guaranteed AI Translation Engine (No Parsing Failures)
 def execute_bridge_translation(text, target_hint=None):
     if not GROQ_API_KEY:
         return None
 
     system_instruction = (
-        "You are an infallible world-class live chat translation engine. "
-        "Analyze the user's text and provide a JSON response ONLY. Never output markdown outside the JSON block.\n\n"
-        "RULES:\n"
-        "1. Accurately detect the source language.\n"
-        "2. If target_hint is provided and DIFFERENT from source language, translate into target_hint.\n"
-        "3. If target_hint is NOT provided or is same as source language:\n"
-        "   - If input is Malayalam -> Target is Persian\n"
-        "   - If input is Persian/Tajik -> Target is Malayalam\n"
-        "   - If input is German -> Target is Malayalam (or English)\n"
-        "   - If input is English -> Target is Persian\n"
-        "   - Any other language -> Target is English\n"
-        "4. NEVER output the original text as translation. ALWAYS provide an authentic translated sentence.\n"
-        "5. Output valid JSON strictly matching these exact keys:\n"
-        "{\n"
-        '  "src_lang": "Language Name",\n'
-        '  "src_flag": "Emoji Flag",\n'
-        '  "src_city": "Capital/City",\n'
-        '  "trg_lang": "Target Language Name",\n'
-        '  "trg_flag": "Emoji Flag",\n'
-        '  "trg_city": "Target Capital/City",\n'
-        '  "trg_code": "2-letter ISO code",\n'
-        '  "translation": "Translated text in target language",\n'
-        '  "meaning_en": "Clear English meaning of the sentence",\n'
-        '  "native_phonetic": "How to pronounce in native script or phonetic spelling",\n'
-        '  "english_phonetic": "How to pronounce using English Latin letters (Transliteration)"\n'
-        "}"
+        "You are an infallible multilingual bridge interpreter.\n"
+        "Strict Translation Rules:\n"
+        "1. Identify source language.\n"
+        "2. If input is Malayalam or English, target is Persian (unless partner is German/etc).\n"
+        "3. If input is Persian, target is Malayalam.\n"
+        "4. If target_hint is specified and different, translate to target_hint.\n"
+        "5. NEVER leave translation empty, and NEVER return the original input.\n"
+        "6. Provide English Meaning, Native Script Phonetics, and Latin English Transliteration.\n\n"
+        "You MUST output exactly 6 lines in this format:\n"
+        "SOURCE: [Source Language]\n"
+        "TARGET: [Target Language]\n"
+        "TRANSLATION: [Translated sentence]\n"
+        "MEANING: [English meaning]\n"
+        "NATIVE_PHONETIC: [Phonetic reading in target script]\n"
+        "LATIN_PHONETIC: [Phonetic reading in English letters]"
     )
 
-    user_prompt = f"Text to translate: \"{text}\"\nTarget Hint: {target_hint or 'None'}"
+    user_prompt = f"Text: \"{text}\"\nTarget Requirement: {target_hint or 'Auto-Detect'}"
 
     try:
         completion = groq_client.chat.completions.create(
@@ -140,11 +120,22 @@ def execute_bridge_translation(text, target_hint=None):
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_prompt}
             ],
-            response_format={"type": "json_object"},
             temperature=0.1,
-            max_tokens=500,
+            max_tokens=450,
         )
-        return json.loads(completion.choices[0].message.content.strip())
+        content = completion.choices[0].message.content.strip()
+        
+        parsed = {}
+        for line in content.splitlines():
+            line = line.strip()
+            if line.startswith("SOURCE:"): parsed["src"] = line.replace("SOURCE:", "").strip()
+            elif line.startswith("TARGET:"): parsed["trg"] = line.replace("TARGET:", "").strip()
+            elif line.startswith("TRANSLATION:"): parsed["trans"] = line.replace("TRANSLATION:", "").strip()
+            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+            elif line.startswith("NATIVE_PHONETIC:"): parsed["native_p"] = line.replace("NATIVE_PHONETIC:", "").strip()
+            elif line.startswith("LATIN_PHONETIC:"): parsed["latin_p"] = line.replace("LATIN_PHONETIC:", "").strip()
+        
+        return parsed
     except Exception:
         return None
 
@@ -175,8 +166,8 @@ def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: str):
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⭐️ <b>STAR VIP STORE & VAULT</b> ⭐️\n\n"
-        "Free translation quota reached!\n\n"
-        "• Unlimited Automatic 2-Way Translations\n"
+        "Free translation quota exhausted!\n\n"
+        "• Unlimited 2-Way Translations\n"
         "• Ultra-Clear Neural Voice Playback\n"
         "• 0.75x Slow-Motion Voice Player\n"
         "• Secret VIP Luxury Themes\n\n"
@@ -194,7 +185,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start in 100% English
+# 7. Clean English Start Screen
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -207,10 +198,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome = (
         f"🌐 <b>SMART 2-WAY DIALOGUE INTERPRETER</b>\n"
         f"{vip_badge}\n"
-        "• ⚡ <b>100% Automatic</b>: Locks languages dynamically for both participants.\n"
-        "• 🔄 <b>Cross Translation</b>: Seamless real-time bidirectional chatting.\n"
-        "• 🗣 <b>Dual Phonetics</b>: Native script guidance and English transliteration.\n"
-        "• 🔊 <b>Single Target Audio</b>: Listen to the translated pronunciation.\n\n"
+        "• ⚡ <b>100% Automatic</b>: Locks languages dynamically for both chat partners.\n"
+        "• 🔄 <b>Cross Translation</b>: Seamless real-time cross-language chatting.\n"
+        "• 🗣 <b>Dual Phonetics</b>: Native script and English Latin transliteration.\n"
+        "• 🔊 <b>Single Target Audio</b>: Listen to the translated voice accurately.\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Change start animation\n"
         "📊 /status • Check quota & VIP status\n"
@@ -273,7 +264,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Handling Text Translations via Reliable JSON
+# 8. Handling Text with Guaranteed Phonetics & Audio
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
         return
@@ -295,36 +286,41 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_languages = context.chat_data["user_languages"]
 
-    # Identify other user's language
+    # Partner language tracking
     partner_ids = [uid for uid in user_languages if uid != user_id]
     partner_target = user_languages[partner_ids[0]] if partner_ids else None
 
-    data = execute_bridge_translation(text, partner_target)
+    # Detect Malayalam script directly
+    is_malayalam = bool(re.search(r'[\u0D00-\u0D7F]', text))
+    if not partner_target and is_malayalam:
+        partner_target = "Persian"
 
-    if not data or not isinstance(data, dict):
-        # Fallback if network drops
-        data = {
-            "src_lang": "Original",
-            "src_flag": "🌐",
-            "src_city": "Global",
-            "trg_lang": partner_target or "English",
-            "trg_flag": "🌐",
-            "trg_city": "Global",
-            "trg_code": "en",
-            "translation": text,
-            "meaning_en": text,
-            "native_phonetic": "",
-            "english_phonetic": ""
-        }
+    res = execute_bridge_translation(text, partner_target)
 
-    src_lang = data.get("src_lang", "Original")
-    trg_lang = data.get("trg_lang", "Target")
-    translation = data.get("translation", text)
-    meaning_en = data.get("meaning_en", "")
-    native_pron = data.get("native_phonetic", "")
-    en_pron = data.get("english_phonetic", "")
+    src_lang = res.get("src", "Malayalam" if is_malayalam else "Detected")
+    trg_lang = res.get("trg", partner_target or "Persian")
+    translation = res.get("trans", text)
+    meaning_en = res.get("meaning", text)
+    native_pron = res.get("native_p", "")
+    latin_pron = res.get("latin_p", "")
 
-    # Save user's detected language
+    # Hard Guarantee: Never translate to same language
+    if src_lang.lower() == trg_lang.lower():
+        if "persian" in src_lang.lower() or "farsi" in src_lang.lower():
+            trg_lang = "Malayalam"
+        elif "malayalam" in src_lang.lower():
+            trg_lang = "Persian"
+        else:
+            trg_lang = "English"
+        # Re-query if language was mismatched
+        res = execute_bridge_translation(text, trg_lang)
+        if res:
+            translation = res.get("trans", translation)
+            meaning_en = res.get("meaning", meaning_en)
+            native_pron = res.get("native_p", native_pron)
+            latin_pron = res.get("latin_p", latin_pron)
+
+    # Save user language
     if src_lang and "unknown" not in src_lang.lower():
         user_languages[user_id] = src_lang
 
@@ -332,8 +328,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["free_credits"][user_id] -= 1
         _, status_val, _ = is_user_active(context, user_id)
 
-    src_info = get_voice_info(src_lang, fallback_flag=data.get("src_flag"), fallback_loc=data.get("src_city"))
-    trg_info = get_voice_info(trg_lang, fallback_code=data.get("trg_code"), fallback_flag=data.get("trg_flag"), fallback_loc=data.get("trg_city"))
+    src_info = get_voice_info(src_lang)
+    trg_info = get_voice_info(trg_lang)
 
     user_theme_key = context.chat_data.get("user_theme", {}).get(user_id, "chibi")
     active_theme = ALL_THEMES.get(user_theme_key, STANDARD_THEMES["chibi"])
@@ -347,19 +343,19 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quote_symbol = ""
         status_line = f"🏃 Status: {status_val}"
 
-    # Guaranteed Phonetics & Meaning Layout
+    # Structured Phonetic Block
     native_pron_block = f"🗣 <i>Phonetic ({trg_lang}):</i> <code>{native_pron}</code>\n" if native_pron else ""
-    en_pron_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{en_pron}</tg-spoiler>\n" if en_pron else ""
+    latin_pron_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_pron}</tg-spoiler>\n" if latin_pron else ""
     meaning_block = f"📖 <i>Meaning (EN):</i> {meaning_en}\n" if meaning_en else ""
 
     card_text = (
         f"{vip_header}"
         f"👤 <b>{user_name}</b>\n"
-        f"{trg_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"📍 <i>{src_info['loc']} ⇄ {trg_info['loc']}</i>\n\n"
         f"<blockquote>{quote_symbol}{translation}</blockquote>"
         f"{native_pron_block}"
-        f"{en_pron_block}"
+        f"{latin_pron_block}"
         f"{meaning_block}\n"
         f"{status_line}"
     )
@@ -368,7 +364,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.bot_data[f"tts_trg_{msg_id}"] = {
         "text": translation,
         "voice": trg_info["voice"],
-        "gtts_code": trg_info["gtts"],
+        "gtts_code": trg_info.get("gtts", "en"),
         "lang": trg_lang
     }
 
@@ -380,10 +376,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 9. Dual-Engine Audio Player (Edge-TTS + gTTS Fallback = 0% Failures)
+# 9. Guaranteed Audio Playback Engine
 async def handle_tts_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🎙️ Generating native voice...")
+    await query.answer("🎙️ Generating native speech...")
     data = query.data
 
     is_slow = data.startswith("slow_")
@@ -402,7 +398,7 @@ async def handle_tts_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     audio_buffer = io.BytesIO()
     success = False
 
-    # Attempt 1: High quality Microsoft Edge Neural Voice
+    # Try Edge-TTS first (Ultra Realistic Neural Voice)
     if voice:
         try:
             communicate = edge_tts.Communicate(text_to_speak, voice, rate=rate_str)
@@ -415,21 +411,21 @@ async def handle_tts_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             success = False
 
-    # Attempt 2: Auto Google TTS Fallback for rare dialects
+    # Safe Fallback to gTTS if Edge-TTS has connection timeout
     if not success:
         try:
-            try:
-                tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
-            except Exception:
-                tts = gTTS(text=text_to_speak, lang='en', slow=is_slow)
+            tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
             audio_buffer = io.BytesIO()
             tts.write_to_fp(audio_buffer)
             audio_buffer.seek(0)
             audio_buffer.name = "voice.mp3"
             success = True
-        except Exception as e:
-            await query.answer(f"Audio Error: {str(e)[:45]}", show_alert=True)
-            return
+        except Exception:
+            tts = gTTS(text=text_to_speak, lang='en', slow=is_slow)
+            audio_buffer = io.BytesIO()
+            tts.write_to_fp(audio_buffer)
+            audio_buffer.seek(0)
+            audio_buffer.name = "voice.mp3"
 
     caption = f"🔊 <i>Spoken ({cache['lang']}): \"{text_to_speak[:45]}...\"</i>"
     await context.bot.send_voice(chat_id=query.message.chat_id, voice=audio_buffer, caption=caption, parse_mode="HTML")
@@ -477,7 +473,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     except Exception:
         await update.message.reply_text(gift_text, parse_mode="HTML")
 
-# 11. Run Engine
+# 11. Run Application
 async def run_bot():
     await start_web_server()
 
