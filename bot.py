@@ -72,7 +72,7 @@ VOICE_MAP = {
     "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
     "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
     "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
-    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "label": "🇫🇷", "loc": "Paris"},
+    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
     "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
     "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
 }
@@ -123,13 +123,22 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         user_prompt = f"Message: \"{text}\""
 
-    # നിലവിൽ ലഭ്യമായ ഏറ്റവും പുതിയ Llama 3 മോഡൽ
-    models_to_try = [
-        "llama-3.1-8b-instant"
-    ]
-    last_error = ""
+    # Groq-ൽ നിന്ന് ആക്ടീവ് ആയ മോഡലുകൾ ഓട്ടോമാറ്റിക് ആയി ഫെച്ച് ചെയ്തു എടുക്കുന്ന സിസ്റ്റം
+    try:
+        models_response = client.models.list()
+        available_models = [m.id for m in models_response.data if "llama" in m.id or "mixtral" in m.id or "gemma" in m.id]
+    except Exception:
+        available_models = []
 
-    for model_name in models_to_try:
+    # ഫെച്ച് ചെയ്യാൻ പറ്റിയില്ലെങ്കിൽ ഏറ്റവും സുരക്ഷിതമായ ബാക്ക്അപ്പ് ലിസ്റ്റ്
+fallback_models = available_models + [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "llama-3.2-3b-preview"
+]
+
+    last_error = ""
+    for model_name in fallback_models:
         try:
             completion = client.chat.completions.create(
                 model=model_name,
