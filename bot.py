@@ -128,7 +128,6 @@ def _sync_gemini_call(text, recent_languages=None, is_group=False):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            # Using 'gemini-1.5-flash' which is universally available and stable
             response = client.models.generate_content(
                 model='gemini-1.5-flash',
                 contents=prompt,
