@@ -28,13 +28,12 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 groq_client = Groq(api_key=GROQ_API_KEY)
 
-# Animated Assets
 ANIM_STORE_URL = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbnYydWhsazBqczJycHJmdTR5cWNvZGFoYm95am03MGl2aTFxZTN3ZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYWZ0N25xZG82OXF0NWlhbnF6bWc2dHFob2ZlZmxmbnlucTNtc2xxeSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/l0ExhcMymdL6TrZ84/giphy.gif"
 
 # 2. Render Keep-Alive Server
 async def handle_ping(request):
-    return web.Response(text="Translator Core Online!")
+    return web.Response(text="Translator Engine Running Smoothly!")
 
 async def start_web_server():
     app = web.Application()
@@ -46,7 +45,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Theme Registry (4 Free Dedicated Themes + VIP Vault)
+# 3. Themes: 4 Free + VIP Vault
 STANDARD_THEMES = {
     "chibi": {
         "label": "🎀 Chibi Anime Girl Talking Fast",
@@ -74,7 +73,7 @@ PREMIUM_THEMES = {
     "vip_gold": {
         "label": "👑 Royal Imperial Gold",
         "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif",
-        "badge": "⚜️ 24K GOLD EDITION ⚜️",
+        "badge": "⚜️ 24K GOLD VIP ⚜️",
         "quote_prefix": "👑 ",
         "vip": True
     },
@@ -103,101 +102,48 @@ PREMIUM_THEMES = {
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
 
-# 4. Regional Cultural Registry
-LANGUAGE_THEMES = {
-    # Central & South Asian Languages
-    "persian": {"flag": "🇮🇷", "loc": "Tehran", "accent": "🕌", "code": "fa"},
-    "farsi": {"flag": "🇮🇷", "loc": "Tehran", "accent": "🕌", "code": "fa"},
-    "azerbaijani": {"flag": "🇦🇿", "loc": "Baku", "accent": "🔥", "code": "az"},
-    "azeri": {"flag": "🇦🇿", "loc": "Baku", "accent": "🔥", "code": "az"},
-    "uzbek": {"flag": "🇺🇿", "loc": "Tashkent", "accent": "🏛️", "code": "uz"},
-    "tajik": {"flag": "🇹🇯", "loc": "Dushanbe", "accent": "🏔️", "code": "tg"},
-    "malayalam": {"flag": "🇮🇳", "loc": "Kerala", "accent": "🌴", "code": "ml"},
-    "tamil": {"flag": "🇮🇳", "loc": "Chennai", "accent": "🛕", "code": "ta"},
-    "hindi": {"flag": "🇮🇳", "loc": "Delhi", "accent": "🦚", "code": "hi"},
-    "bengali": {"flag": "🇧🇩", "loc": "Dhaka", "accent": "🐅", "code": "bn"},
-
-    # Hard Complex Scripts & Dialects
-    "mandarin": {"flag": "🇨🇳", "loc": "Beijing", "accent": "🐉", "code": "zh-cn"},
-    "chinese": {"flag": "🇨🇳", "loc": "Beijing", "accent": "🐉", "code": "zh-cn"},
-    "japanese": {"flag": "🇯🇵", "loc": "Tokyo", "accent": "⛩️", "code": "ja"},
-    "korean": {"flag": "🇰🇷", "loc": "Seoul", "accent": "🇰🇷", "code": "ko"},
-    "arabic": {"flag": "🇦🇪", "loc": "Dubai", "accent": "🕌", "code": "ar"},
-    "hungarian": {"flag": "🇭🇺", "loc": "Budapest", "accent": "🏰", "code": "hu"},
-    "finnish": {"flag": "🇫🇮", "loc": "Helsinki", "accent": "❄️", "code": "fi"},
-    "icelandic": {"flag": "🇮🇸", "loc": "Reykjavik", "accent": "🌋", "code": "is"},
-    "polish": {"flag": "🇵🇱", "loc": "Warsaw", "accent": "🦅", "code": "pl"},
-    "russian": {"flag": "🇷🇺", "loc": "Moscow", "accent": "🪆", "code": "ru"},
-    "georgian": {"flag": "🇬🇪", "loc": "Tbilisi", "accent": "🍇", "code": "ka"},
-    "armenian": {"flag": "🇦🇲", "loc": "Yerevan", "accent": "🏔️", "code": "hy"},
-    "vietnamese": {"flag": "🇻🇳", "loc": "Hanoi", "accent": "🏮", "code": "vi"},
-    "thai": {"flag": "🇹🇭", "loc": "Bangkok", "accent": "🛕", "code": "th"},
-    "greek": {"flag": "🇬🇷", "loc": "Athens", "accent": "🏛️", "code": "el"},
-    "hebrew": {"flag": "🇮🇱", "loc": "Jerusalem", "accent": "📜", "code": "iw"},
-    "basque": {"flag": "🇪🇸", "loc": "Bilbao", "accent": "🌲", "code": "eu"},
-    "turkish": {"flag": "🇹🇷", "loc": "Istanbul", "accent": "☕", "code": "tr"},
-    "ukrainian": {"flag": "🇺🇦", "loc": "Kyiv", "accent": "🌻", "code": "uk"},
-    "czech": {"flag": "🇨🇿", "loc": "Prague", "accent": "🏰", "code": "cs"},
-
-    # Global Standards
-    "german": {"flag": "🇩🇪", "loc": "Berlin", "accent": "🏰", "code": "de"},
-    "italian": {"flag": "🇮🇹", "loc": "Rome", "accent": "🏛️", "code": "it"},
-    "french": {"flag": "🇫🇷", "loc": "Paris", "accent": "🥐", "code": "fr"},
-    "spanish": {"flag": "🇪🇸", "loc": "Madrid", "accent": "💃", "code": "es"},
-    "english": {"flag": "🇬🇧", "loc": "London", "accent": "🎡", "code": "en"},
-}
-
-def get_theme(lang_name):
-    lang_key = (lang_name or "").lower()
-    for key, theme in LANGUAGE_THEMES.items():
-        if key in lang_key:
-            return theme
-    return {"flag": "🌐", "loc": "Global", "accent": "⚡", "code": "en"}
-
-# 5. Groq Translation Engine
-def execute_groq_text(prompt):
+# 4. Universal LLM Processing Engine
+def execute_groq_translation(prompt):
     if not GROQ_API_KEY:
-        return "Error: GROQ_API_KEY missing."
+        return "Error: GROQ_API_KEY Missing."
+
+    system_instruction = (
+        "You are an infallible world-class polyglot linguist and universal translator. "
+        "Analyze the given input text accurately, detect its source language even if it's a single word, "
+        "rare dialect, or written in complex/Cyrillic scripts (e.g., Tajik, Uzbek, Kazakh, Azerbaijani, Persian, Georgian, Malayalam). "
+        "Translate it naturally to the target language. "
+        "Generate natural phonetic English romanization for BOTH source and translated words (never write NONE, provide readable pronunciation). "
+        "Find the country flag emoji, capital/major city, and standard 2-letter ISO voice code for both languages (e.g., Tajik=tg, Persian=fa, Uzbek=uz, Russian=ru, German=de, Malayalam=ml).\n"
+        "Strictly return output in this exact 9-line format without backticks or other conversational filler:\n"
+        "SRC_NAME: [Source Language Name]\n"
+        "SRC_FLAG: [Source Country Flag Emoji]\n"
+        "SRC_CITY: [Source Major City]\n"
+        "SRC_CODE: [Source 2-Letter ISO Voice Code]\n"
+        "SRC_PRON: [Phonetic pronunciation of the input]\n"
+        "TRG_NAME: [Target Language Name]\n"
+        "TRG_FLAG: [Target Country Flag Emoji]\n"
+        "TRG_CITY: [Target Major City]\n"
+        "TRG_CODE: [Target 2-Letter ISO Voice Code]\n"
+        "TRG_PRON: [Phonetic pronunciation of the translated text]\n"
+        "RES: [Accurate translated text only]"
+    )
 
     try:
-        model_list = groq_client.models.list()
-        valid_models = [
-            m.id for m in model_list.data
-            if not any(x in m.id.lower() for x in ["whisper", "guard", "vision", "embed", "safeguard"])
-        ]
-
-        for model_id in valid_models:
-            try:
-                completion = groq_client.chat.completions.create(
-                    model=model_id,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are an expert polyglot interpreter fluent in all scripts and dialects. "
-                                "Translate accurately with natural regional phrasing. "
-                                "Follow the 4-line format strictly without extra remarks or <think> tags."
-                            )
-                        },
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.2,
-                    max_tokens=400,
-                )
-                if completion and completion.choices:
-                    res = completion.choices[0].message.content.strip()
-                    res = re.sub(r'<think>.*?</think>', '', res, flags=re.DOTALL).strip()
-                    return res
-            except Exception:
-                continue
-
-        return "Translation unavailable."
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,
+            max_tokens=500,
+        )
+        return completion.choices[0].message.content.strip()
     except Exception as e:
-        return f"Groq Error: {str(e)[:80]}"
+        return f"ERROR: {str(e)}"
 
-# 6. Quotas & Subscriptions
+# 5. User Quota & VIP Logic
 FREE_LIMIT = 100
-
 PLANS = {
     "sub_1m": {"name": "1 Month VIP", "days": 30, "stars": 50, "badge": "⭐️ VIP"},
     "sub_3m": {"name": "3 Months VIP", "days": 90, "stars": 120, "badge": "💎 ELITE"},
@@ -230,13 +176,12 @@ def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: str) -> tuple[bo
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⭐️ <b>STAR VIP STORE & VAULT</b> ⭐️\n\n"
-        "Your free trial limit has been reached!\n\n"
-        "🎁 <b>VIP Elite Perks:</b>\n"
-        "• Secret VIP Themes (Gold, Cyber Neon, Matrix, Soundwaves)\n"
-        "• High-priority zero latency queue\n"
-        "• Unlimited real-time audio pronunciation\n"
-        "• Slow-motion (0.75x) dialect study player\n"
-        "• Exclusive VIP status badges on cards\n\n"
+        "Free translation limit reached!\n\n"
+        "👑 <b>VIP Perks:</b>\n"
+        "• Unlimited real-time translations\n"
+        "• Dual Voice Audio with 0.75x Slow-Motion player\n"
+        "• Secret VIP Luxury Themes (Gold, Cyber Neon, Matrix)\n"
+        "• High-priority zero latency queue\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
         "• <b>3 Months ELITE:</b> 120 Stars <i>(20% Off)</i>\n"
         "• <b>1 Year LEGEND:</b> 399 Stars <i>(Best Value!)</i>"
@@ -257,7 +202,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Bot Handlers
+# 6. Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -270,19 +215,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vip_badge = "👑 <b>VIP PRIVILEGES ACTIVE</b>\n" if is_vip else ""
 
     welcome = (
-        f"🌐 <b>UNIVERSAL OMNILINGUAL TRANSLATOR</b>\n"
+        f"🌐 <b>UNIVERSAL OMNILINGUAL INTERPRETER</b>\n"
         f"{vip_badge}\n"
-        "• ⚡ Speak naturally in your native language\n"
-        "• 🎁 <b>100 Free Translations</b> included\n"
-        "• 🔊 Tap to listen to native pronunciation\n"
-        "• 🌍 Supports Persian, Uzbek, Tajik, Azerbaijani & 100+ global languages\n\n"
+        "• ⚡ Type or speak in any language\n"
+        "• 🗣 Dual Phonetics (Original & Translation)\n"
+        "• 🔊 Dual Voice Playback for all 100+ global languages\n"
+        "• 🎁 <b>100 Free Translations</b> included\n\n"
         "<b>Commands:</b>\n"
-        "🎨 /theme • Pick your welcome animation\n"
-        "📊 /status • Check quota / VIP status\n"
+        "🎨 /theme • Customize welcome screen\n"
+        "📊 /status • Check quota & VIP status\n"
         "⏸ /stop • Pause translation\n"
         "▶️ /resume • Resume translation\n"
         "⭐️ /premium • Star VIP Store\n\n"
-        "Send any text or voice note to begin!"
+        "Send any message or voice note to begin!"
     )
     try:
         await update.message.reply_animation(
@@ -298,12 +243,11 @@ async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _, _, is_vip = is_user_active(context, user_id)
 
     keyboard = []
-
-    # Free Users Theme Section
+    # 4 Free Standard Themes
     for key, item in STANDARD_THEMES.items():
         keyboard.append([InlineKeyboardButton(item["label"], callback_data=f"settheme_{key}")])
 
-    # VIP Vault Theme Section
+    # VIP Themes
     for key, item in PREMIUM_THEMES.items():
         label = f"✨ {item['label']}" if is_vip else f"🔒 {item['label']} [VIP]"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"settheme_{key}")])
@@ -315,13 +259,9 @@ async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🐕 Funny Confused / Breakthrough Doge\n"
         "• 🍌 Excited Minion Polyglot\n"
         "• 🐱 Dancing Happy Cat\n\n"
-        "👑 <b>VIP Vault:</b> Gold, Cyber Neon, and Matrix themes (Unlocked with Telegram Stars)!"
+        "👑 <b>VIP Vault:</b> Royal Gold, Cyberpunk Neon, Matrix, and Soundwave animations!"
     )
-    await update.message.reply_text(
-        menu_text,
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text(menu_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -346,22 +286,21 @@ async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT
     context.chat_data["user_theme"][user_id] = theme_key
 
     await query.edit_message_text(
-        f"✅ <b>Active screen theme set to:</b>\n{selected['label']}\n\n"
-        "Send /start to view your new animation!",
+        f"✅ <b>Welcome screen updated to:</b>\n{selected['label']}\n\n"
+        "Send /start anytime to see it in action!",
         parse_mode="HTML"
     )
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
-    _, status_val, is_vip = is_user_active(context, user_id)
-    is_paused = context.chat_data.get("paused", False)
-    state = "⏸ Paused" if is_paused else "▶️ Active"
+    _, status_val, _ = is_user_active(context, user_id)
+    state = "⏸ Paused" if context.chat_data.get("paused", False) else "▶️ Active"
 
     status_text = (
-        f"📊 <b>STATUS</b>\n"
-        f"🏃 Status: {status_val}\n"
+        f"📊 <b>TRANSLATOR CORE STATUS</b>\n\n"
+        f"🏃 Usage Quota: {status_val}\n"
         f"🔄 State: {state}\n\n"
-        f"<i>Send /premium to unlock the VIP Vault & unlimited translations!</i>"
+        f"<i>Unlock unlimited usage & VIP styles with /premium</i>"
     )
     await update.message.reply_text(status_text, parse_mode="HTML")
 
@@ -395,154 +334,115 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_langs = context.chat_data["user_langs"]
     other_users = [uid for uid in user_langs if uid != user_id]
-    target_lang = user_langs[other_users[0]] if other_users else None
+    target_lang = user_langs[other_users[0]] if other_users else "English"
 
-    prompt = (
-        f"Input: \"{text}\"\n"
-        f"Target language: {target_lang or 'English'}\n\n"
-        "Instructions:\n"
-        "1. Identify the source language accurately.\n"
-        "2. Translate naturally into the target language.\n"
-        "3. Provide phonetic romanization if non-latin script (or NONE).\n"
-        "4. Output strictly in this 4-line format:\n"
-        "SRC: [Source Language]\n"
-        "TRG: [Target Language]\n"
-        "PRON: [Phonetic pronunciation or NONE]\n"
-        "RES: [Final translation only]"
-    )
+    prompt = f"Input Text: \"{text}\"\nTarget Language Request: {target_lang}"
+    raw_response = execute_groq_translation(prompt)
 
-    raw_response = execute_groq_text(prompt)
-
-    src_lang = "Auto"
-    trg_lang = target_lang or "English"
-    pronunciation = "NONE"
-    translation = raw_response
+    # Defaults
+    src_name, src_flag, src_city, src_code, src_pron = "Original", "🌐", "Global", "en", ""
+    trg_name, trg_flag, trg_city, trg_code, trg_pron = "Target", "🌐", "Global", "en", ""
+    translation = text
 
     for line in raw_response.splitlines():
         line = line.strip()
-        if line.startswith("SRC:"):
-            src_lang = line.replace("SRC:", "").strip()
-        elif line.startswith("TRG:"):
-            trg_lang = line.replace("TRG:", "").strip()
-        elif line.startswith("PRON:"):
-            pronunciation = line.replace("PRON:", "").strip()
-        elif line.startswith("RES:"):
-            translation = line.replace("RES:", "").strip()
+        if line.startswith("SRC_NAME:"): src_name = line.replace("SRC_NAME:", "").strip()
+        elif line.startswith("SRC_FLAG:"): src_flag = line.replace("SRC_FLAG:", "").strip()
+        elif line.startswith("SRC_CITY:"): src_city = line.replace("SRC_CITY:", "").strip()
+        elif line.startswith("SRC_CODE:"): src_code = line.replace("SRC_CODE:", "").strip().lower()
+        elif line.startswith("SRC_PRON:"): src_pron = line.replace("SRC_PRON:", "").strip()
+        elif line.startswith("TRG_NAME:"): trg_name = line.replace("TRG_NAME:", "").strip()
+        elif line.startswith("TRG_FLAG:"): trg_flag = line.replace("TRG_FLAG:", "").strip()
+        elif line.startswith("TRG_CITY:"): trg_city = line.replace("TRG_CITY:", "").strip()
+        elif line.startswith("TRG_CODE:"): trg_code = line.replace("TRG_CODE:", "").strip().lower()
+        elif line.startswith("TRG_PRON:"): trg_pron = line.replace("TRG_PRON:", "").strip()
+        elif line.startswith("RES:"): translation = line.replace("RES:", "").strip()
 
-    if src_lang and "unknown" not in src_lang.lower():
-        user_langs[user_id] = src_lang
+    if src_name and "unknown" not in src_name.lower():
+        user_langs[user_id] = src_name
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
         _, status_val, _ = is_user_active(context, user_id)
 
-    src_th = get_theme(src_lang)
-    trg_th = get_theme(trg_lang)
-
-    pron_line = f"\n🗣️ <i>Phonetic:</i> <tg-spoiler>{pronunciation}</tg-spoiler>" if pronunciation and pronunciation != "NONE" else ""
-
-    # VIP Styling Checks
+    # VIP Styling
     user_theme_key = context.chat_data.get("user_theme", {}).get(user_id, "chibi")
     active_theme = ALL_THEMES.get(user_theme_key, STANDARD_THEMES["chibi"])
 
     if is_vip and active_theme.get("vip"):
         vip_header = f"<b>{active_theme.get('badge')}</b>\n"
-        quote_symbol = active_theme.get("quote_prefix", "✨ ")
+        quote_prefix = active_theme.get("quote_prefix", "✨ ")
         status_line = f"👑 <b>VIP Priority Lane</b> • {status_val}"
     else:
         vip_header = ""
-        quote_symbol = ""
+        quote_prefix = ""
         status_line = f"🏃 Status: {status_val}"
+
+    # Phonetics Lines
+    src_pron_block = f"🗣 <i>Original:</i> <code>{src_pron}</code>\n" if src_pron and src_pron.upper() != "NONE" else ""
+    trg_pron_block = f"🗣 <i>Phonetic:</i> <tg-spoiler>{trg_pron}</tg-spoiler>\n" if trg_pron and trg_pron.upper() != "NONE" else ""
 
     card_text = (
         f"{vip_header}"
-        f"{src_th['flag']} <code>{src_lang.upper()}</code> ➔ {trg_th['flag']} <code>{trg_lang.upper()}</code>\n"
-        f"📍 <i>{src_th['loc']} ⇄ {trg_th['loc']}</i>\n\n"
-        f"<blockquote>{quote_symbol}{translation}</blockquote>"
-        f"{pron_line}\n\n"
+        f"{src_flag} <code>{src_name.upper()}</code> ➔ {trg_flag} <code>{trg_name.upper()}</code>\n"
+        f"📍 <i>{src_city} ⇄ {trg_city}</i>\n\n"
+        f"{src_pron_block}"
+        f"<blockquote>{quote_prefix}{translation}</blockquote>"
+        f"{trg_pron_block}\n"
         f"{status_line}"
     )
 
-    msg_key = f"tts_{placeholder.message_id}"
-    context.bot_data[msg_key] = {
-        "text": translation,
-        "lang": trg_lang,
-        "lang_code": trg_th["code"]
-    }
+    msg_id = placeholder.message_id
+    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "code": src_code, "name": src_name}
+    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "code": trg_code, "name": trg_name}
 
-    # Action Buttons (Standard Voice + VIP Slow-Mo Button)
-    buttons = [InlineKeyboardButton(f"🔊 Listen ({trg_th['flag']})", callback_data=f"play_{placeholder.message_id}")]
+    # Dual Listen Buttons
+    buttons = [
+        InlineKeyboardButton(f"🔊 Listen ({src_flag} {src_name})", callback_data=f"play_src_{msg_id}"),
+        InlineKeyboardButton(f"🔊 Listen ({trg_flag} {trg_name})", callback_data=f"play_trg_{msg_id}")
+    ]
+    keyboard = [buttons]
+
+    # VIP Slow-Mo Button
     if is_vip:
-        buttons.append(InlineKeyboardButton("🐢 Slow-Mo (0.75x)", callback_data=f"slow_{placeholder.message_id}"))
+        keyboard.append([InlineKeyboardButton(f"🐢 Slow-Mo (0.75x {trg_flag})", callback_data=f"slow_trg_{msg_id}")])
 
-    await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([buttons]))
+    await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def handle_tts_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_audio_playback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🎙️ Generating native audio...")
+    await query.answer("🎙️ Generating native speech...")
+    data = query.data
 
-    msg_id = query.data.replace("play_", "")
-    cache = context.bot_data.get(f"tts_{msg_id}")
+    is_slow = data.startswith("slow_")
+    key_prefix = "aud_trg_" if "trg" in data else "aud_src_"
+    msg_id = data.split("_")[-1]
 
+    cache = context.bot_data.get(f"{key_prefix}{msg_id}")
     if not cache:
-        await query.answer("Session expired. Send a new message!", show_alert=True)
+        await query.answer("Session expired. Please send a new text!", show_alert=True)
         return
 
     text_to_speak = cache["text"]
-    lang_code = cache.get("lang_code", "en")
+    lang_code = cache.get("code", "en")
 
     try:
         try:
-            tts = gTTS(text=text_to_speak, lang=lang_code)
+            tts = gTTS(text=text_to_speak, lang=lang_code, slow=is_slow)
         except Exception:
-            tts = gTTS(text=text_to_speak, lang='en')
+            # Fallback to English voice safely if code is unsupported by gTTS
+            tts = gTTS(text=text_to_speak, lang='en', slow=is_slow)
 
         audio_buffer = io.BytesIO()
         tts.write_to_fp(audio_buffer)
         audio_buffer.seek(0)
-        audio_buffer.name = "pronunciation.mp3"
+        audio_buffer.name = "voice.mp3"
 
-        await context.bot.send_voice(
-            chat_id=query.message.chat_id,
-            voice=audio_buffer,
-            caption=f"🔊 <i>Native Spoken: \"{text_to_speak[:40]}...\"</i>",
-            parse_mode="HTML"
-        )
+        speed_label = "Slowed" if is_slow else "Native"
+        caption = f"🔊 <i>{speed_label} Pronunciation: \"{text_to_speak[:45]}...\"</i>"
+        await context.bot.send_voice(chat_id=query.message.chat_id, voice=audio_buffer, caption=caption, parse_mode="HTML")
     except Exception as e:
-        await query.answer(f"Audio error: {str(e)[:50]}", show_alert=True)
-
-async def handle_slow_tts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    msg_id = query.data.replace("slow_", "")
-    cache = context.bot_data.get(f"tts_{msg_id}")
-
-    if not cache:
-        await query.answer("Session expired!", show_alert=True)
-        return
-
-    await query.answer("🎙️ Generating slow pronunciation...")
-    text_to_speak = cache["text"]
-    lang_code = cache.get("lang_code", "en")
-
-    try:
-        try:
-            tts = gTTS(text=text_to_speak, lang=lang_code, slow=True)
-        except Exception:
-            tts = gTTS(text=text_to_speak, lang='en', slow=True)
-
-        audio_buffer = io.BytesIO()
-        tts.write_to_fp(audio_buffer)
-        audio_buffer.seek(0)
-        audio_buffer.name = "slow_pronunciation.mp3"
-
-        await context.bot.send_voice(
-            chat_id=query.message.chat_id,
-            voice=audio_buffer,
-            caption=f"🐢 <i>Slowed native pronunciation for learning</i>",
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        await query.answer(f"Audio error: {str(e)[:50]}", show_alert=True)
+        await query.answer(f"Audio Error: {str(e)[:45]}", show_alert=True)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
@@ -580,33 +480,26 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         spoken_text = transcription.text.strip()
 
-        prompt = (
-            f"Voice transcript: \"{spoken_text}\"\n"
-            f"Target language: {target_lang}\n\n"
-            "Translate accurately into target language. Output strictly:\n"
-            "SRC: [Source Language]\n"
-            "RES: [Translated text only]"
-        )
+        prompt = f"Voice Transcript: \"{spoken_text}\"\nTarget Language: {target_lang}"
+        raw_response = execute_groq_translation(prompt)
 
-        raw_response = execute_groq_text(prompt)
-        src_lang = "Audio"
-        translation = raw_response
+        src_name, src_flag, trg_name, trg_flag = "Audio", "🎙️", "Target", "🌐"
+        translation = spoken_text
 
         for line in raw_response.splitlines():
             line = line.strip()
-            if line.startswith("SRC:"):
-                src_lang = line.replace("SRC:", "").strip()
-            elif line.startswith("RES:"):
-                translation = line.replace("RES:", "").strip()
+            if line.startswith("SRC_NAME:"): src_name = line.replace("SRC_NAME:", "").strip()
+            elif line.startswith("SRC_FLAG:"): src_flag = line.replace("SRC_FLAG:", "").strip()
+            elif line.startswith("TRG_NAME:"): trg_name = line.replace("TRG_NAME:", "").strip()
+            elif line.startswith("TRG_FLAG:"): trg_flag = line.replace("TRG_FLAG:", "").strip()
+            elif line.startswith("RES:"): translation = line.replace("RES:", "").strip()
 
         if not is_vip:
             context.chat_data["free_credits"][user_id] -= 1
             _, status_val, _ = is_user_active(context, user_id)
 
-        trg_th = get_theme(target_lang)
-
         card_text = (
-            f"🎙️ <code>{src_lang.upper()}</code> ➔ {trg_th['flag']} <code>{target_lang.upper()}</code> {trg_th['accent']}\n\n"
+            f"🎙️ <code>{src_name.upper()}</code> {src_flag} ➔ {trg_flag} <code>{trg_name.upper()}</code>\n\n"
             f"🗣 <i>\"{spoken_text}\"</i>\n\n"
             f"<blockquote>✨ {translation}</blockquote>\n\n"
             f"🏃 Status: {status_val}"
@@ -619,7 +512,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if os.path.exists(temp_path):
             os.remove(temp_path)
 
-# 8. Telegram Star Payments & VIP Gifts Activation
+# 7. Telegram Star Payments
 async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -634,7 +527,7 @@ async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_
     await context.bot.send_invoice(
         chat_id=query.message.chat_id,
         title=f"⭐️ {plan['name']}",
-        description=f"Unlock VIP Vault themes, stickers, and unlimited translations for {plan['days']} days.",
+        description=f"Unlock VIP luxury themes, dual voice slow-mo, and unlimited translations for {plan['days']} days.",
         payload=plan_key,
         provider_token="",
         currency="XTR",
@@ -646,7 +539,7 @@ async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     if query.invoice_payload in PLANS:
         await query.answer(ok=True)
     else:
-        await query.answer(ok=False, error_message="Invalid plan selected.")
+        await query.answer(ok=False, error_message="Invalid plan selection.")
 
 async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
@@ -670,17 +563,16 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     context.chat_data["premium_expiry"][user_id] = new_expiry.isoformat()
     context.chat_data["vip_tier"][user_id] = plan["badge"]
 
-    # Assign default luxury VIP theme
     if "user_theme" not in context.chat_data:
         context.chat_data["user_theme"] = {}
     context.chat_data["user_theme"][user_id] = "vip_gold"
 
     gift_celebration_text = (
-        f"🎁 <b>VIP GIFTS & VAULT UNLOCKED!</b> ⭐️\n\n"
+        f"🎁 <b>VIP VAULT & MEMBERSHIP UNLOCKED!</b> ⭐️\n\n"
         f"👑 <b>Tier:</b> {plan['name']}\n"
         f"💎 <b>Badge:</b> {plan['badge']}\n"
         f"⏳ <b>Valid Until:</b> <code>{new_expiry.strftime('%Y-%m-%d')}</code>\n\n"
-        f"✨ <i>VIP Vault themes unlocked! Type /theme to pick your luxury animation.</i>"
+        f"✨ <i>All limits removed: Unlimited dual translations & VIP Vault active!</i>"
     )
 
     try:
@@ -692,7 +584,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     except Exception:
         await update.message.reply_text(gift_celebration_text, parse_mode="HTML")
 
-# 9. Polling Loop
+# 8. Main Safe Application Loop
 async def run_bot():
     await start_web_server()
 
@@ -703,12 +595,14 @@ async def run_bot():
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("resume", resume_command))
     app.add_handler(CommandHandler("premium", premium_command))
+
     app.add_handler(CallbackQueryHandler(plan_selection_callback, pattern="^buy_"))
     app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
-    app.add_handler(CallbackQueryHandler(handle_tts_button, pattern="^play_"))
-    app.add_handler(CallbackQueryHandler(handle_slow_tts, pattern="^slow_"))
+    app.add_handler(CallbackQueryHandler(handle_audio_playback, pattern="^(play_|slow_)"))
+
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
+
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
