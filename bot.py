@@ -21,10 +21,10 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-from groq import Groq
+from google import genai
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -84,80 +84,70 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def _sync_groq_call(text, recent_languages=None, is_group=False):
-    if not GROQ_API_KEY:
-        return {"error": "GROQ_API_KEY is not configured in Render!"}
+def _sync_gemini_call(text, recent_languages=None, is_group=False):
+    if not GEMINI_API_KEY:
+        return {"error": "GEMINI_API_KEY is not configured in Render!"}
 
-    client = Groq(api_key=GROQ_API_KEY)
-    lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
 
-    if is_group:
-        system_instruction = (
-            "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
-            f"{lang_context}\n"
-            "Rules:\n"
-            "1. Accurately detect source language on the fly.\n"
-            "2. Adapt instantly to language shifts and cross-translate.\n"
-            "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-            "SRC: [Detected Source Language Name]\n"
-            "TRG: [Target Language Name]\n"
-            "TRANS: [Translated Text]\n"
-            "MEANING: [English meaning]\n"
-            "NATIVE_P: [Phonetic in native script]\n"
-            "LATIN_P: [Phonetic in English Latin alphabet]"
-        )
-        user_prompt = f"Group Message: \"{text}\""
-    else:
-        system_instruction = (
-            "You are a dedicated Personal Language Assistant and Tutor.\n"
-            "Rules:\n"
-            "1. Detect source language accurately.\n"
-            "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
-            "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-            "SRC: [Source Language Name]\n"
-            "TRG: [Target Language Name]\n"
-            "TRANS: [Translated Text]\n"
-            "MEANING: [English meaning]\n"
-            "NATIVE_P: [Phonetic in native script]\n"
-            "LATIN_P: [Phonetic in English Latin alphabet]"
-        )
-        user_prompt = f"Message: \"{text}\""
-
-    models_to_try = ["llama-3.1-8b-instant"]
-    last_error = ""
-
-    for model_name in models_to_try:
-        try:
-            completion = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.1,
-                max_tokens=400,
+        if is_group:
+            system_instruction = (
+                "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
+                f"{lang_context}\n"
+                "Rules:\n"
+                "1. Accurately detect source language on the fly.\n"
+                "2. Adapt instantly to language shifts and cross-translate.\n"
+                "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+                "SRC: [Detected Source Language Name]\n"
+                "TRG: [Target Language Name]\n"
+                "TRANS: [Translated Text]\n"
+                "MEANING: [English meaning]\n"
+                "NATIVE_P: [Phonetic in native script]\n"
+                "LATIN_P: [Phonetic in English Latin alphabet]"
             )
-            raw = completion.choices[0].message.content.strip()
-            parsed = {}
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+            prompt = f"{system_instruction}\n\nGroup Message: \"{text}\""
+        else:
+            system_instruction = (
+                "You are a dedicated Personal Language Assistant and Tutor.\n"
+                "Rules:\n"
+                "1. Detect source language accurately.\n"
+                "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
+                "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+                "SRC: [Source Language Name]\n"
+                "TRG: [Target Language Name]\n"
+                "TRANS: [Translated Text]\n"
+                "MEANING: [English meaning]\n"
+                "NATIVE_P: [Phonetic in native script]\n"
+                "LATIN_P: [Phonetic in English Latin alphabet]"
+            )
+            prompt = f"{system_instruction}\n\nMessage: \"{text}\""
 
-            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
-                return parsed
-        except Exception as e:
-            last_error = str(e)
-            continue
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+        )
+        raw = response.text.strip()
+        parsed = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+            elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+            elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
 
-    return {"error": f"Groq Error: {last_error}"}
+        if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
+            return parsed
+        else:
+            return {"error": "Gemini returned invalid format."}
+    except Exception as e:
+        return {"error": f"Gemini Error: {str(e)}"}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
-    return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
+    return await asyncio.to_thread(_sync_gemini_call, text, recent_languages, is_group)
 
 FREE_LIMIT = 100
 PLANS = {
