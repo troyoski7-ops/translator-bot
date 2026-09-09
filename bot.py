@@ -41,7 +41,7 @@ async def start_web_server():
     site = web.TCPSite(runner, '0.0.0.0', port)
     await site.start()
 
-# 3. Themes
+# 3. 4 Free Themes + 4 Full Premium Themes
 STANDARD_THEMES = {
     "chibi": {"label": "🎀 Chibi Anime Girl", "url": "https://media.giphy.com/media/B2wxqJaigm4E0/giphy.gif", "vip": False},
     "doge": {"label": "🐕 Thinking Doge", "url": "https://media.giphy.com/media/5Zesu5VPNGJlm/giphy.gif", "vip": False},
@@ -52,6 +52,8 @@ STANDARD_THEMES = {
 PREMIUM_THEMES = {
     "vip_gold": {"label": "👑 Royal Gold VIP", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "quote_prefix": "👑 ", "vip": True},
     "vip_cyber": {"label": "🐉 Cyber Tokyo Neon", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBER MATRIX VIP ⚡", "quote_prefix": "🔮 ", "vip": True},
+    "vip_matrix": {"label": "⚡ Quantum Matrix Core", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "✨ ASTRAL HORIZON ✨", "quote_prefix": "🪐 ", "vip": True},
+    "vip_sound": {"label": "🎧 Hologram Soundwaves", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "quote_prefix": "❄️ ", "vip": True},
 }
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
@@ -87,7 +89,7 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-# 5. Pure Dynamic Groq Translation Engine (Never hardcodes model names)
+# 5. Dynamic Groq Engine
 def _sync_groq_call(text, target_hint, is_solo=False):
     if not GROQ_API_KEY:
         return {"error": "GROQ_API_KEY is missing in Render Environment Variables!"}
@@ -118,18 +120,15 @@ def _sync_groq_call(text, target_hint, is_solo=False):
 
     user_prompt = f"Message: \"{text}\"\nTarget Requirement: {target_hint or ('Auto-Solo' if is_solo else 'Auto-Group')}"
 
-    # Query Groq account directly for currently available text chat models
     try:
         available_models = client.models.list()
-        # Filter out whisper (audio), guard, vision, and embedding models
         chat_models = [
             m.id for m in available_models.data
             if not any(x in m.id.lower() for x in ["whisper", "guard", "vision", "embed", "safeguard"])
         ]
-    except Exception as e:
+    except Exception:
         chat_models = []
 
-    # If dynamic query succeeded, try available models; otherwise fallback to standard llama
     models_to_try = chat_models if chat_models else ["llama-3.3-70b-versatile"]
 
     last_error_msg = ""
@@ -211,7 +210,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await context.bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML", reply_markup=keyboard)
 
-# 7. Start Command
+# 7. Start & Themes
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
@@ -233,7 +232,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎨 /theme • Change animation | 📊 /status • Check quota\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • Star VIP Store\n\n"
-        "Send any text or voice note to begin chatting!"
+        "Send any text or voice note to begin!"
     )
     try:
         await update.message.reply_animation(animation=active_theme["url"], caption=welcome, parse_mode="HTML")
@@ -290,7 +289,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Handling Incoming Voice Notes (Whisper AI)
+# 8. Handling Incoming Voice Notes
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
         return
@@ -332,7 +331,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await status_msg.edit_text(f"⚠️ Voice Error: {str(e)[:60]}", parse_mode="HTML")
 
-# 9. Dynamic Text Processing & Cross Bridge (Group + Solo DM)
+# 9. Dynamic Text Processing & Cross Bridge
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): 
         return
@@ -431,7 +430,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 10. Dual-Engine Audio Player
+# 10. Robust Audio Generator Pipeline (Full Length Voice Fix)
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎙️ Generating native speech...")
@@ -451,8 +450,10 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rate_str = "-25%" if is_slow else "+0%"
 
     audio_buf = io.BytesIO()
+    audio_type = "mp3"
     worked = False
 
+    # Attempt 1: High Quality Microsoft Edge Neural Voice
     if voice_edge:
         try:
             communicate = edge_tts.Communicate(text_to_speak, voice_edge, rate=rate_str)
@@ -460,11 +461,14 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if chunk["type"] == "audio":
                     audio_buf.write(chunk["data"])
             audio_buf.seek(0)
-            audio_buf.name = "voice.ogg"
-            worked = True
+            if audio_buf.getbuffer().nbytes > 500:
+                audio_type = "mp3"
+                audio_buf.name = "voice.mp3"
+                worked = True
         except Exception:
             worked = False
 
+    # Attempt 2: Google TTS Fallback
     if not worked:
         try:
             def _gtts_task():
@@ -488,7 +492,23 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     speed_label = "Slowed" if is_slow else "Native"
     caption = f"🔊 <i>{speed_label} ({cache['lang']}): \"{text_to_speak[:45]}...\"</i>"
-    await context.bot.send_voice(chat_id=query.message.chat_id, voice=audio_buf, caption=caption, parse_mode="HTML")
+    
+    # Send as Telegram Audio/Voice with full length playback
+    try:
+        await context.bot.send_voice(
+            chat_id=query.message.chat_id,
+            voice=audio_buf,
+            caption=caption,
+            parse_mode="HTML"
+        )
+    except Exception:
+        audio_buf.seek(0)
+        await context.bot.send_audio(
+            chat_id=query.message.chat_id,
+            audio=audio_buf,
+            caption=caption,
+            parse_mode="HTML"
+        )
 
 # 11. Star Payments
 async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
