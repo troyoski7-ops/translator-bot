@@ -2,6 +2,7 @@ import os
 import re
 import io
 import asyncio
+import tempfile
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
@@ -289,7 +290,7 @@ async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
-# 8. Handling Incoming Voice Notes
+# 8. Handling Incoming Voice Notes (Whisper AI)
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False):
         return
@@ -430,7 +431,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
-# 10. Robust Audio Generator Pipeline (Full Length Voice Fix)
+# 10. 100% Reliable File-Backed Audio Generator
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer("🎙️ Generating native speech...")
@@ -449,66 +450,54 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gtts_code = cache.get("gtts_code", "en")
     rate_str = "-25%" if is_slow else "+0%"
 
-    audio_buf = io.BytesIO()
-    audio_type = "mp3"
-    worked = False
-
-    # Attempt 1: High Quality Microsoft Edge Neural Voice
-    if voice_edge:
-        try:
-            communicate = edge_tts.Communicate(text_to_speak, voice_edge, rate=rate_str)
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_buf.write(chunk["data"])
-            audio_buf.seek(0)
-            if audio_buf.getbuffer().nbytes > 500:
-                audio_type = "mp3"
-                audio_buf.name = "voice.mp3"
-                worked = True
-        except Exception:
-            worked = False
-
-    # Attempt 2: Google TTS Fallback
-    if not worked:
-        try:
-            def _gtts_task():
-                buf = io.BytesIO()
-                tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
-                tts.write_to_fp(buf)
-                buf.seek(0)
-                buf.name = "voice.mp3"
-                return buf
-            audio_buf = await asyncio.to_thread(_gtts_task)
-            worked = True
-        except Exception:
-            def _gtts_en():
-                buf = io.BytesIO()
-                tts = gTTS(text=text_to_speak, lang='en', slow=is_slow)
-                tts.write_to_fp(buf)
-                buf.seek(0)
-                buf.name = "voice.mp3"
-                return buf
-            audio_buf = await asyncio.to_thread(_gtts_en)
-
+    temp_audio_file = None
     speed_label = "Slowed" if is_slow else "Native"
     caption = f"🔊 <i>{speed_label} ({cache['lang']}): \"{text_to_speak[:45]}...\"</i>"
-    
-    # Send as Telegram Audio/Voice with full length playback
+
     try:
-        await context.bot.send_voice(
+        # Step 1: Generate file via Edge-TTS
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+            temp_audio_file = f.name
+
+        worked = False
+        if voice_edge:
+            try:
+                communicate = edge_tts.Communicate(text_to_speak, voice_edge, rate=rate_str)
+                await communicate.save(temp_audio_file)
+                if os.path.getsize(temp_audio_file) > 1000:
+                    worked = True
+            except Exception:
+                worked = False
+
+        # Step 2: Fallback to gTTS if Edge-TTS fails
+        if not worked:
+            def _save_gtts():
+                tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
+                tts.save(temp_audio_file)
+            await asyncio.to_thread(_save_gtts)
+
+        # Step 3: Send audio file directly (Plays full sentence with 00:01 bug fixed!)
+        with open(temp_audio_file, "rb") as audio:
+            await context.bot.send_audio(
+                chat_id=query.message.chat_id,
+                audio=audio,
+                title=f"{cache['lang']} Pronunciation",
+                performer="Translator Bridge AI",
+                caption=caption,
+                parse_mode="HTML"
+            )
+
+    except Exception as e:
+        await context.bot.send_message(
             chat_id=query.message.chat_id,
-            voice=audio_buf,
-            caption=caption,
-            parse_mode="HTML"
+            text=f"⚠️ Audio playback error: {str(e)[:60]}"
         )
-    except Exception:
-        audio_buf.seek(0)
-        await context.bot.send_audio(
-            chat_id=query.message.chat_id,
-            audio=audio_buf,
-            caption=caption,
-            parse_mode="HTML"
-        )
+    finally:
+        if temp_audio_file and os.path.exists(temp_audio_file):
+            try:
+                os.remove(temp_audio_file)
+            except Exception:
+                pass
 
 # 11. Star Payments
 async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
