@@ -5,12 +5,14 @@ import time
 import asyncio
 import subprocess
 import sys
+import urllib.request
+import urllib.parse
+import json
 
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
-from deep_translator import GoogleTranslator
 from telegram import (
     Update,
     LabeledPrice,
@@ -127,11 +129,15 @@ def smart_latin_fallback(text):
 def _sync_translation_logic(text):
     try:
         is_eng = all(ord(c) < 128 for c in text)
-        target_code = 'ml' if is_eng else 'en'
-        target_lang_name = "Malayalam" if is_eng else "English"
+        target = 'ml' if is_eng else 'en'
         
-        translated = GoogleTranslator(source='auto', target=target_code).translate(text)
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(text)}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         
+        with urllib.request.urlopen(req, timeout=5) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            translated = "".join([item[0] for item in result[0] if item[0]])
+            
         if not translated:
             return {"error": "Translation failed. Please try again."}
 
@@ -144,7 +150,7 @@ def _sync_translation_logic(text):
 
         return {
             "src": src_lang_name,
-            "trg": target_lang_name,
+            "trg": "Malayalam" if is_eng else "English",
             "trans": translated,
             "meaning": translated,
             "native_p": text,
@@ -522,7 +528,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
-    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
+    app.add_handlers(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
     await app.initialize()
     try: await app.bot.delete_webhook(drop_pending_updates=True)
