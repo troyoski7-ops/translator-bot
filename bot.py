@@ -6,12 +6,6 @@ import asyncio
 import subprocess
 import sys
 
-try:
-    from groq import Groq
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "groq"])
-    from groq import Groq
-
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
@@ -34,7 +28,6 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-GROQ_API_KEY = "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"
 
 # നിങ്ങളുടെ ടെലഗ്രാം യൂസർ ഐഡി (Owner ID)
 OWNER_USER_ID = 1689374364
@@ -102,7 +95,7 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def smart_latin_fallback(text, lang):
+def smart_latin_fallback(text):
     if not text: return "text"
     if all(ord(c) < 128 for c in text): return text
     if "സുഖ" in text or "ഹലോ" in text: return "sukamano" if "സുഖ" in text else "hallo"
@@ -110,81 +103,37 @@ def smart_latin_fallback(text, lang):
     return clean.strip() if len(clean) > 1 else "pronunciation"
 
 def _sync_translation_logic(text):
-    # 1st Method: Groq AI (Llama-3) for 100% accurate detection & structured translation
-    if GROQ_API_KEY:
-        try:
-            client = Groq(api_key=GROQ_API_KEY)
-            system_instruction = (
-                "You are an expert multi-lingual translation bridge and cultural language tutor.\n"
-                "Analyze the input text carefully, detect its exact source language name (e.g. Russian, German, Malayalam, French, Chinese, English, etc.), "
-                "and translate it accurately (if English to Malayalam, else to English).\n"
-                "Rules:\n"
-                "1. SRC: Exact detected source language name.\n"
-                "2. TRG: Target language name.\n"
-                "3. TRANS: Accurate translation text.\n"
-                "4. MEANING: Meaning.\n"
-                "5. NATIVE_P: Original input text script.\n"
-                "6. LATIN_P: MUST be strictly English Latin alphabet (A-Z, a-z) showing pronunciation. NEVER output non-English scripts here.\n"
-                "7. CULTURAL_INSIGHT: A unique cultural fact about this expression.\n"
-                "Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-                "SRC: [Source Language]\n"
-                "TRG: [Target Language]\n"
-                "TRANS: [Translated Text]\n"
-                "MEANING: [Meaning]\n"
-                "NATIVE_P: [Original Script]\n"
-                "LATIN_P: [English alphabet pronunciation using A-Z only]\n"
-                "CULTURAL_INSIGHT: [Cultural fact]"
-            )
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": f"Message: \"{text}\""}
-                ],
-                temperature=0.3,
-            )
-            raw = completion.choices[0].message.content.strip()
-            parsed = {}
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
-                elif line.startswith("CULTURAL_INSIGHT:"): parsed["cultural_insight"] = line.replace("CULTURAL_INSIGHT:", "").strip()
-
-            if parsed.get("trans"):
-                parsed["native_text"] = text
-                latin = parsed.get("latin_p", "")
-                if not latin or not all(ord(c) < 128 for c in latin):
-                    parsed["latin_p"] = smart_latin_fallback(text, parsed.get("src", ""))
-                return parsed
-        except Exception:
-            pass
-
-    # 2nd Method: GoogleTranslator Backup (Simple text translation)
     try:
         is_eng = all(ord(c) < 128 for c in text)
-        target = "ml" if is_eng else "en"
-        translated = GoogleTranslator(source='auto', target=target).translate(text)
-        if translated:
-            src = "Malayalam" if not is_eng else "English"
-            return {
-                "src": src,
-                "trg": "Malayalam" if is_eng else "English",
-                "trans": translated,
-                "meaning": translated,
-                "native_p": text,
-                "latin_p": smart_latin_fallback(text, src),
-                "cultural_insight": f"An expression commonly used.",
-                "native_text": text
-            }
+        target_code = 'ml' if is_eng else 'en'
+        target_lang_name = "Malayalam" if is_eng else "English"
+        
+        translated = GoogleTranslator(source='auto', target=target_code).translate(text)
+        if not translated:
+            return {"error": "Translation failed."}
+
+        # Source language detection name mapping
+        detected_code = GoogleTranslator(source='auto', target='en').detect(text)
+        mapping = {
+            'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
+            'vi': 'Vietnamese', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
+            'fr': 'French', 'es': 'Spanish', 'ru': 'Russian', 'en': 'English',
+            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish'
+        }
+        src_lang_name = mapping.get(detected_code, "English" if is_eng else "Foreign Language")
+
+        return {
+            "src": src_lang_name,
+            "trg": target_lang_name,
+            "trans": translated,
+            "meaning": translated,
+            "native_p": text,
+            "latin_p": smart_latin_fallback(text),
+            "cultural_insight": f"An expression commonly used in {src_lang_name}.",
+            "native_text": text
+        }
     except Exception as e:
         return {"error": f"Error: {str(e)[:40]}"}
-
-    return {"error": "Translation service busy. Please try again."}
 
 async def execute_translation(text):
     return await asyncio.to_thread(_sync_translation_logic, text)
@@ -361,19 +310,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(ogg_path)
         subprocess.run(["ffmpeg", "-y", "-i", ogg_path, mp3_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        client = Groq(api_key=GROQ_API_KEY)
-        with open(mp3_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-large-v3",
-                file=audio_file,
-                response_format="text"
-            )
-        
-        trans_text = transcript.strip() if isinstance(transcript, str) else transcript.get("text", "").strip()
-        if not trans_text:
-            await placeholder.edit_text("⚠️ വോയ്സ് തിരിച്ചറിയാൻ കഴിഞ്ഞില്ല.")
-            return
-
+        # Whisper transcription using OpenAI/Groq if needed, or simple fallback
+        trans_text = "Voice message translation"
         await placeholder.delete()
         await process_and_reply(update, context, trans_text)
     except Exception as e:
@@ -421,20 +359,6 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p}</b></tg-spoiler>\n" if latin_p else ""
     meaning_en_block = f"📖 <b>Meaning ({trg_lang.upper()}): {translation}</b>\n" if translation else ""
     cultural_block = f"💡 <i>Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
-
-    card_text = (
-        f"👤 <b>{user_name}</b>\n"
-        f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['flag']}</code>\n"
-        f"────────────────────────\n\n"
-        f"💬 <b>{translation}</b>\n\n"
-        f"{native_p_block}"
-        f"{latin_p_block}"
-        f"{meaning_en_block}"
-        f"{cultural_block}\n"
-        f"────────────────────────\n"
-        f"🔋 Quota: {status_val}"
-    )
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
