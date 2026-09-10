@@ -36,6 +36,12 @@ from telegram.ext import (
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GROQ_API_KEY = "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"
 
+# നിങ്ങളുടെ ടെലഗ്രാം യൂസർ ഐഡി
+OWNER_USER_ID = 1689374364
+
+# Dynamic unlimited groups set via /setgroup command
+UNLIMITED_GROUPS = set()
+
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
 
@@ -71,12 +77,13 @@ VOICE_MAP = {
     "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
     "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
     "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
+    "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
+    "ukrainian": {"edge": "uk-UA-PolinaNeural", "gtts": "uk", "flag": "🇺🇦", "loc": "Kyiv"},
     "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
     "uzbek": {"edge": "uz-UZ-MadinaNeural", "gtts": "uz", "flag": "🇺🇿", "loc": "Tashkent"},
     "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "loc": "Astana"},
     "tajik": {"edge": "tg-TJ-GanjinaNeural", "gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
     "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
-    "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
     "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
     "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
     "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
@@ -96,40 +103,57 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def ensure_pure_latin(text):
-    if not text:
-        return ""
-    # If text has non-ASCII characters (native scripts like Malayalam, Arabic/Persian), clean/transliterate via safe map or fallback
-    cleaned = ""
-    for c in text:
-        if ord(c) < 128:
-            cleaned += c
-    cleaned = cleaned.strip()
-    if len(cleaned) < 2:
-        # Fallback romanization for common patterns if AI returned native script
-        return "abgoosht" if "آب" in text or "گوشت" in text else ("sukamano" if "സുഖ" in text else "phonetic-text")
-    return cleaned
+def smart_latin_fallback(text):
+    if not text: return "text"
+    if all(ord(c) < 128 for c in text): return text
+    if "സുഖ" in text: return "sukamano"
+    if "آب" in text or "گوشت" in text: return "abgoosht"
+    if "Wie geht es dir" in text: return "wie geht es dir"
+    clean = "".join([c for c in text if ord(c) < 128])
+    return clean.strip() if len(clean) > 1 else "pronunciation"
 
 def _sync_translation_logic(text):
+    detected_lang_name = "English"
+    try:
+        detected_code = GoogleTranslator(source='auto', target='en').detect(text)
+        code_to_name = {
+            'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
+            'az': 'Azerbaijani', 'uz': 'Uzbek', 'kk': 'Kazakh', 'tg': 'Tajik',
+            'tr': 'Turkish', 'ar': 'Arabic', 'ru': 'Russian', 'en': 'English',
+            'hi': 'Hindi', 'fr': 'French', 'es': 'Spanish', 'zh': 'Chinese', 'ja': 'Japanese'
+        }
+        detected_lang_name = code_to_name.get(detected_code, detected_code.capitalize())
+    except Exception:
+        if any(ord(c) > 3000 for c in text): detected_lang_name = "Malayalam"
+        elif any(ord(c) > 1500 for c in text): detected_lang_name = "Persian"
+        elif any(ord(c) < 128 for c in text): detected_lang_name = "English"
+        else: detected_lang_name = "German"
+
+    target_lang = "Malayalam" if detected_lang_name.lower() == "english" else "English"
+
     if GROQ_API_KEY:
         try:
             client = Groq(api_key=GROQ_API_KEY)
             system_instruction = (
-                "You are an expert multi-lingual translation bridge and cultural language tutor.\n"
+                f"You are a professional multi-lingual translator and tutor.\n"
+                f"Input text is in: {detected_lang_name}.\n"
+                f"Target language for translation: {target_lang}.\n"
                 "Rules:\n"
-                "1. Detect the true source language accurately.\n"
-                "2. Translate text accurately to English.\n"
-                "3. In NATIVE_P, put the original text/script.\n"
-                "4. In LATIN_P, you MUST output ONLY standard English Latin letters (A-Z, a-z). Never put Arabic, Persian, Malayalam, or other native scripts in LATIN_P. Provide exact English pronunciation spelling (e.g., 'sukamano', 'abgoosht').\n"
-                "5. In CULTURAL_INSIGHT, generate a unique, highly specific cultural fact, idiom, or historical context directly and strictly about THIS specific word or phrase. Do not give generic statements.\n"
-                "6. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-                "SRC: [Source Language Name]\n"
-                "TRG: [Target Language Name]\n"
-                "TRANS: [Translated Text in Target Language]\n"
-                "MEANING: [English meaning of the text]\n"
-                "NATIVE_P: [Original native text/script]\n"
-                "LATIN_P: [Strictly English alphabet phonetic spelling, e.g. abgoosht or sukamano]\n"
-                "CULTURAL_INSIGHT: [Unique cultural context specific to this exact word]"
+                f"1. SRC must be exactly: {detected_lang_name}\n"
+                f"2. TRG must be exactly: {target_lang}\n"
+                "3. TRANS: Provide accurate translation.\n"
+                "4. MEANING: Provide meaning.\n"
+                "5. NATIVE_P: Original script.\n"
+                "6. LATIN_P: MUST be strictly English Latin alphabet (A-Z, a-z) showing pronunciation (e.g. 'sukamano' or 'wie geht es dir'). NEVER output native non-English scripts here.\n"
+                "7. CULTURAL_INSIGHT: A unique and specific cultural fact about this text.\n"
+                "Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+                f"SRC: {detected_lang_name}\n"
+                f"TRG: {target_lang}\n"
+                "TRANS: [Translated text]\n"
+                "MEANING: [Meaning]\n"
+                "NATIVE_P: [Original text]\n"
+                "LATIN_P: [English alphabet pronunciation]\n"
+                "CULTURAL_INSIGHT: [Cultural fact]"
             )
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -137,7 +161,7 @@ def _sync_translation_logic(text):
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": f"Message: \"{text}\""}
                 ],
-                temperature=0.5,
+                temperature=0.3,
             )
             raw = completion.choices[0].message.content.strip()
             parsed = {}
@@ -153,43 +177,30 @@ def _sync_translation_logic(text):
 
             if parsed.get("trans"):
                 parsed["native_text"] = text
-                # Force clean latin check
                 latin = parsed.get("latin_p", "")
                 if not latin or not all(ord(c) < 128 for c in latin):
-                    parsed["latin_p"] = ensure_latin_fallback(text)
+                    parsed["latin_p"] = smart_latin_fallback(text)
                 return parsed
         except Exception:
             pass
 
     try:
-        is_eng = all(ord(c) < 128 for c in text)
-        target = "ml" if is_eng else "en"
-        translated = GoogleTranslator(source='auto', target=target).translate(text)
+        translated = GoogleTranslator(source='auto', target='ml' if detected_lang_name.lower() == 'english' else 'en').translate(text)
         if translated:
-            src = "Malayalam" if any(ord(c) > 3000 for c in text) else ("Persian" if any(ord(c) > 1500 for c in text) else "English")
             return {
-                "src": src,
-                "trg": "English",
+                "src": detected_lang_name,
+                "trg": target_lang,
                 "trans": translated,
                 "meaning": translated,
                 "native_p": text,
-                "latin_p": ensure_latin_fallback(text),
-                "cultural_insight": f"A unique expression characteristic of {src} culture.",
+                "latin_p": smart_latin_fallback(text),
+                "cultural_insight": f"An expression commonly used in {detected_lang_name}.",
                 "native_text": text
             }
     except Exception as e:
         return {"error": f"Error: {str(e)[:40]}"}
 
     return {"error": "Translation service busy."}
-
-def ensure_latin_fallback(text):
-    if "آب" in text or "گوشت" in text:
-        return "abgoosht"
-    if "സുഖ" in text:
-        return "sukamano"
-    # Generate generic safe romanized token if non-ascii
-    clean = "".join([c for c in text if ord(c) < 128])
-    return clean if len(clean) > 1 else "phonetic-word"
 
 async def execute_translation(text):
     return await asyncio.to_thread(_sync_translation_logic, text)
@@ -201,7 +212,10 @@ PLANS = {
     "sub_1y": {"name": "1 Year VIP Pass", "days": 365, "stars": 399, "badge": "👑 LEGEND"},
 }
 
-def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: str):
+def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: str, chat_id: int):
+    if int(user_id) == OWNER_USER_ID or chat_id in UNLIMITED_GROUPS:
+        return True, "♾️ UNLIMITED", True
+
     if "premium_expiry" not in context.chat_data: context.chat_data["premium_expiry"] = {}
     if "free_credits" not in context.chat_data: context.chat_data["free_credits"] = {}
 
@@ -216,6 +230,20 @@ def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: str):
 
     rem = context.chat_data["free_credits"][user_id]
     return (True, f"{rem}/100", False) if rem > 0 else (False, "Expired", False)
+
+async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat = update.effective_chat
+    
+    if user_id != OWNER_USER_ID:
+        await update.message.reply_text("⛔ You are not authorized to use this command.")
+        return
+
+    if chat.type in ["group", "supergroup"]:
+        UNLIMITED_GROUPS.add(chat.id)
+        await update.message.reply_text(f"🚀 <b>Success!</b> This group is now set to <b>Unlimited Translations</b> for everyone!", parse_mode="HTML")
+    else:
+        await update.message.reply_text("⚠️ This command can only be used inside a Telegram Group!", parse_mode="HTML")
 
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -241,7 +269,8 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
-    _, _, is_vip = is_user_active(context, user_id)
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
 
     custom_bg = context.chat_data.get("user_custom_bg", {}).get(user_id)
     selected_theme = context.chat_data.get("user_theme", {}).get(user_id, "chibi")
@@ -255,11 +284,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "🌐 <b>Universal Multi-User & Group Support:</b>\n"
-        "• Send text or voice notes in any language (Malayalam, Persian, Turkish, Uzbek, etc.).\n"
-        "• 🔊 <b>HD Audio Synthesis:</b> Get instant dual audio buttons with language flags!\n\n"
+        "• Anyone can use this bot and add it to groups.\n"
+        "• Owner can type <code>/setgroup</code> in a group to make it completely free/unlimited.\n\n"
         "<b>Commands:</b>\n"
+        "🚀 /setgroup • Make current group unlimited (Owner only)\n"
         "🎨 /theme • Holographic UI Theme\n"
-        "🖼 /custombg [URL] • Set Custom VIP Background GIF\n"
         "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • VIP Vault\n\n"
@@ -272,7 +301,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
-    _, _, is_vip = is_user_active(context, user_id)
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
     keyboard = []
     for key, item in STANDARD_THEMES.items():
         keyboard.append([InlineKeyboardButton(item["label"], callback_data=f"settheme_{key}")])
@@ -286,7 +316,8 @@ async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     theme_key = query.data.replace("settheme_", "")
     user_id = str(update.effective_user.id)
-    _, _, is_vip = is_user_active(context, user_id)
+    chat_id = query.message.chat_id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
 
     selected = ALL_THEMES.get(theme_key)
     if not selected: return
@@ -299,7 +330,8 @@ async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT
 
 async def custom_bg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
-    _, _, is_vip = is_user_active(context, user_id)
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
     if not is_vip:
         await update.message.reply_text("🔒 <b>VIP Exclusive Feature!</b>", parse_mode="HTML")
         return
@@ -313,7 +345,8 @@ async def custom_bg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
-    _, status_val, _ = is_user_active(context, user_id)
+    chat_id = update.effective_chat.id
+    _, status_val, _ = is_user_active(context, user_id, chat_id)
     await update.message.reply_text(f"📊 <b>Quota:</b> {status_val}", parse_mode="HTML")
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -373,9 +406,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     user = update.effective_user
     user_id = str(user.id)
+    chat_id = update.effective_chat.id
     user_name = user.first_name or "Operator"
 
-    active, status_val, is_vip = is_user_active(context, user_id)
+    active, status_val, is_vip = is_user_active(context, user_id, chat_id)
     if not active:
         await send_store_menu(update.effective_chat.id, context)
         return
@@ -387,23 +421,23 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
-    src_lang = res.get("src", "Malayalam" if any(ord(c) > 3000 for c in text) else ("Persian" if any(ord(c) > 1500 for c in text) else "English"))
-    trg_lang = res.get("trg", "English")
+    src_lang = res.get("src", "English")
+    trg_lang = res.get("trg", "Malayalam")
     translation = res.get("trans", text)
     native_p = res.get("native_p", text)
     latin_p = res.get("latin_p", "")
-    cultural_insight = res.get("cultural_insight", "A unique expression characteristic of this language.")
+    cultural_insight = res.get("cultural_insight", "A unique linguistic expression.")
 
-    if not is_vip:
+    if int(user_id) != OWNER_USER_ID and chat_id not in UNLIMITED_GROUPS and not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
-        _, status_val, _ = is_user_active(context, user_id)
+        _, status_val, _ = is_user_active(context, user_id, chat_id)
 
     src_info = get_voice_info(src_lang)
     trg_info = get_voice_info(trg_lang)
 
     native_p_block = f"🗣 <i>Phonetic ({src_info['flag']} {src_lang}):</i> <code>{native_p}</code>\n" if native_p else ""
     latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p}</b></tg-spoiler>\n" if latin_p else ""
-    meaning_en_block = f"📖 <b>Meaning (EN): {translation}</b>\n" if translation else ""
+    meaning_en_block = f"📖 <b>Meaning ({trg_lang.upper()}): {translation}</b>\n" if translation else ""
     cultural_block = f"💡 <i>Cultural Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
 
     card_text = (
@@ -531,6 +565,7 @@ async def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("setgroup", set_group_command))
     app.add_handler(CommandHandler("theme", theme_command))
     app.add_handler(CommandHandler("custombg", custom_bg_command))
     app.add_handler(CommandHandler("status", status_command))
