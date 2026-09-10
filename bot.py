@@ -68,6 +68,7 @@ ANIM_STORE_URL = "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
 VOICE_MAP = {
+    "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
     "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
     "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
     "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
@@ -79,7 +80,6 @@ VOICE_MAP = {
     "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
     "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
     "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
-    "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
     "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
     "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "loc": "London"},
     "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
@@ -103,18 +103,18 @@ def _sync_translation_logic(text):
             system_instruction = (
                 "You are an expert multi-lingual translation bridge and cultural language tutor.\n"
                 "Rules:\n"
-                "1. Accurately detect source language (Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, German, English, Malayalam, etc.).\n"
+                "1. Accurately and strictly detect the true source language of the input text (e.g., if input is Malayalam like 'സുഖമാണോ', source must be 'Malayalam'. If Persian, 'Persian', etc.).\n"
                 "2. Translate text accurately.\n"
-                "3. In LATIN_P, provide strict English phonetic spelling using English alphabet so someone can read it naturally (e.g. 'sukamano' for സുഖമാണോ, 'Abgoosht' for آب گوشت).\n"
-                "4. In CULTURAL_INSIGHT, generate a unique, specific cultural fact, historical background, or idiom directly related to THIS exact word or phrase. DO NOT use generic phrases.\n"
+                "3. In LATIN_P, provide strict English phonetic romanized spelling using English alphabet so someone can read it naturally (e.g. 'sukamano' for സുഖമാണോ, 'Abgoosht' for آب گوشت).\n"
+                "4. In CULTURAL_INSIGHT, generate a unique, specific, and fresh cultural fact, historical background, or linguistic idiom directly related to THIS exact word or phrase. Avoid generic sentences.\n"
                 "5. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-                "SRC: [Source Language Name]\n"
-                "TRG: [Target Language Name]\n"
+                "SRC: [True Source Language Name, e.g. Malayalam or Persian]\n"
+                "TRG: [Target Language Name, e.g. English]\n"
                 "TRANS: [Translated Text in Target Language]\n"
                 "MEANING: [English meaning of the text]\n"
                 "NATIVE_P: [Original native text/script]\n"
-                "LATIN_P: [English readable phonetic spelling like Abgoosht]\n"
-                "CULTURAL_INSIGHT: [Specific cultural context or fact about this word]"
+                "LATIN_P: [English readable phonetic spelling like sukamano or Abgoosht]\n"
+                "CULTURAL_INSIGHT: [Unique and specific cultural context or fact about this exact word]"
             )
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -122,7 +122,7 @@ def _sync_translation_logic(text):
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": f"Message: \"{text}\""}
                 ],
-                temperature=0.3,
+                temperature=0.4,
             )
             raw = completion.choices[0].message.content.strip()
             parsed = {}
@@ -148,13 +148,13 @@ def _sync_translation_logic(text):
         translated = GoogleTranslator(source='auto', target=target).translate(text)
         if translated:
             return {
-                "src": "Persian" if any(ord(c) > 1500 for c in text) else "AUTO",
+                "src": "Malayalam" if any(ord(c) > 3000 for c in text) else ("Persian" if any(ord(c) > 1500 for c in text) else "English"),
                 "trg": "English",
                 "trans": translated,
                 "meaning": translated,
                 "native_p": text,
                 "latin_p": text,
-                "cultural_insight": "A traditional culinary expression rooted in local heritage.",
+                "cultural_insight": "A common linguistic expression used in daily communication.",
                 "native_text": text
             }
     except Exception as e:
@@ -226,7 +226,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "🌐 <b>Universal Multi-User & Group Support:</b>\n"
-        "• Send text or voice notes in any language (Persian, Turkish, Uzbek, etc.).\n"
+        "• Send text or voice notes in any language (Malayalam, Persian, Turkish, Uzbek, etc.).\n"
         "• 🔊 <b>HD Audio Synthesis:</b> Get instant dual audio buttons with language flags!\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Holographic UI Theme\n"
@@ -358,12 +358,12 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
-    src_lang = res.get("src", "Persian" if any(ord(c) > 1500 for c in text) else "AUTO")
+    src_lang = res.get("src", "Malayalam" if any(ord(c) > 3000 for c in text) else "English")
     trg_lang = res.get("trg", "English")
     translation = res.get("trans", text)
     native_p = res.get("native_p", text)
     latin_p = res.get("latin_p", "")
-    cultural_insight = res.get("cultural_insight", "A fascinating term reflecting traditional culture.")
+    cultural_insight = res.get("cultural_insight", "A rich linguistic expression.")
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
