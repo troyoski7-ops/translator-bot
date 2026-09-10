@@ -1,5 +1,7 @@
+groq
 python-telegram-bot
 gtts
 edge-tts
 aiohttp
 requests
+
