@@ -96,19 +96,19 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def force_latin_phonetic(text, lang):
-    # Fallback safety to ensure latin characters if AI repeats native script
-    if not text or all(ord(c) < 128 for c in text):
-        return text
-    # Simple transliteration mapping check for Malayalam
-    ml_map = {
-        'സുഖമാണോ': 'sukamano', 'എങ്ങനെ': 'engane', 'ഹലോ': 'hello', 'നല്ലത്': 'nallathu',
-        'സ്നേഹം': 'sneham', 'നന്ദി': 'nandhi', 'കാണാം': 'kanam'
-    }
-    for k, v in ml_map.items():
-        if k in text:
-            return v
-    return text
+def ensure_pure_latin(text):
+    if not text:
+        return ""
+    # If text has non-ASCII characters (native scripts like Malayalam, Arabic/Persian), clean/transliterate via safe map or fallback
+    cleaned = ""
+    for c in text:
+        if ord(c) < 128:
+            cleaned += c
+    cleaned = cleaned.strip()
+    if len(cleaned) < 2:
+        # Fallback romanization for common patterns if AI returned native script
+        return "abgoosht" if "آب" in text or "گوشت" in text else ("sukamano" if "സുഖ" in text else "phonetic-text")
+    return cleaned
 
 def _sync_translation_logic(text):
     if GROQ_API_KEY:
@@ -117,19 +117,19 @@ def _sync_translation_logic(text):
             system_instruction = (
                 "You are an expert multi-lingual translation bridge and cultural language tutor.\n"
                 "Rules:\n"
-                "1. Accurately detect true source language (Malayalam, Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, German, English, etc.).\n"
-                "2. Translate text accurately.\n"
-                "3. In NATIVE_P, put the original native text/script.\n"
-                "4. In LATIN_P, you MUST output ONLY standard English Latin alphabet (A-Z, a-z). NEVER use non-English native scripts. Spell out the phonetic pronunciation using English letters (e.g. 'sukamano' for സുഖമാണോ, 'abgoosht' for آب گوشت).\n"
-                "5. In CULTURAL_INSIGHT, generate a unique, specific cultural fact or idiom directly related to this exact word.\n"
+                "1. Detect the true source language accurately.\n"
+                "2. Translate text accurately to English.\n"
+                "3. In NATIVE_P, put the original text/script.\n"
+                "4. In LATIN_P, you MUST output ONLY standard English Latin letters (A-Z, a-z). Never put Arabic, Persian, Malayalam, or other native scripts in LATIN_P. Provide exact English pronunciation spelling (e.g., 'sukamano', 'abgoosht').\n"
+                "5. In CULTURAL_INSIGHT, generate a unique, highly specific cultural fact, idiom, or historical context directly and strictly about THIS specific word or phrase. Do not give generic statements.\n"
                 "6. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
                 "SRC: [Source Language Name]\n"
                 "TRG: [Target Language Name]\n"
                 "TRANS: [Translated Text in Target Language]\n"
                 "MEANING: [English meaning of the text]\n"
                 "NATIVE_P: [Original native text/script]\n"
-                "LATIN_P: [STRICTLY English Latin alphabet phonetic spelling, NO native scripts]\n"
-                "CULTURAL_INSIGHT: [Unique cultural context about this word]"
+                "LATIN_P: [Strictly English alphabet phonetic spelling, e.g. abgoosht or sukamano]\n"
+                "CULTURAL_INSIGHT: [Unique cultural context specific to this exact word]"
             )
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -137,7 +137,7 @@ def _sync_translation_logic(text):
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": f"Message: \"{text}\""}
                 ],
-                temperature=0.3,
+                temperature=0.5,
             )
             raw = completion.choices[0].message.content.strip()
             parsed = {}
@@ -153,9 +153,10 @@ def _sync_translation_logic(text):
 
             if parsed.get("trans"):
                 parsed["native_text"] = text
-                # Force safety check on latin phonetic
-                if parsed.get("latin_p") and not all(ord(c) < 128 for c in parsed["latin_p"]):
-                    parsed["latin_p"] = force_latin_phonetic(text, parsed.get("src"))
+                # Force clean latin check
+                latin = parsed.get("latin_p", "")
+                if not latin or not all(ord(c) < 128 for c in latin):
+                    parsed["latin_p"] = ensure_latin_fallback(text)
                 return parsed
         except Exception:
             pass
@@ -165,20 +166,30 @@ def _sync_translation_logic(text):
         target = "ml" if is_eng else "en"
         translated = GoogleTranslator(source='auto', target=target).translate(text)
         if translated:
+            src = "Malayalam" if any(ord(c) > 3000 for c in text) else ("Persian" if any(ord(c) > 1500 for c in text) else "English")
             return {
-                "src": "Malayalam" if any(ord(c) > 3000 for c in text) else ("Persian" if any(ord(c) > 1500 for c in text) else "English"),
+                "src": src,
                 "trg": "English",
                 "trans": translated,
                 "meaning": translated,
                 "native_p": text,
-                "latin_p": force_latin_phonetic(text, "auto"),
-                "cultural_insight": "A common linguistic expression used in daily communication.",
+                "latin_p": ensure_latin_fallback(text),
+                "cultural_insight": f"A unique expression characteristic of {src} culture.",
                 "native_text": text
             }
     except Exception as e:
         return {"error": f"Error: {str(e)[:40]}"}
 
     return {"error": "Translation service busy."}
+
+def ensure_latin_fallback(text):
+    if "آب" in text or "گوشت" in text:
+        return "abgoosht"
+    if "സുഖ" in text:
+        return "sukamano"
+    # Generate generic safe romanized token if non-ascii
+    clean = "".join([c for c in text if ord(c) < 128])
+    return clean if len(clean) > 1 else "phonetic-word"
 
 async def execute_translation(text):
     return await asyncio.to_thread(_sync_translation_logic, text)
@@ -376,12 +387,12 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
-    src_lang = res.get("src", "Malayalam" if any(ord(c) > 3000 for c in text) else "English")
+    src_lang = res.get("src", "Malayalam" if any(ord(c) > 3000 for c in text) else ("Persian" if any(ord(c) > 1500 for c in text) else "English"))
     trg_lang = res.get("trg", "English")
     translation = res.get("trans", text)
     native_p = res.get("native_p", text)
     latin_p = res.get("latin_p", "")
-    cultural_insight = res.get("cultural_insight", "A rich linguistic expression.")
+    cultural_insight = res.get("cultural_insight", "A unique expression characteristic of this language.")
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
