@@ -5,12 +5,13 @@ import time
 import asyncio
 import subprocess
 import sys
+import requests
 
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
-from deep_translator import GoogleTranslator
+from deep_translator import GoogleTranslator, MyMemoryTranslator
 from telegram import (
     Update,
     LabeledPrice,
@@ -64,7 +65,6 @@ PREMIUM_THEMES = {
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
 
-# അതിശയകരവും എന്റർടൈനിങ് ആയതുമായ പുതിയ കോമഡി/വൈബ്രന്റ് ഗിഫ്റ്റ് ആനിമേഷൻ
 ANIM_WELCOME_URL = "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif"
 ANIM_STORE_URL = "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
@@ -109,9 +109,23 @@ def _sync_translation_logic(text):
         target_code = 'ml' if is_eng else 'en'
         target_lang_name = "Malayalam" if is_eng else "English"
         
-        translated = GoogleTranslator(source='auto', target=target_code).translate(text)
-        if not translated:
-            return {"error": "Translation failed."}
+        translated = None
+        # 1st Try: GoogleTranslator
+        try:
+            translated = GoogleTranslator(source='auto', target=target_code).translate(text)
+        except Exception:
+            pass
+
+        # 2nd Try: MyMemoryTranslator Backup if Google fails or gives error
+        if not translated or "500" in translated or "Error" in translated:
+            try:
+                src_code = 'en' if not is_eng else 'ml'
+                translated = MyMemoryTranslator(source=src_code, target=target_code).translate(text)
+            except Exception:
+                pass
+
+        if not translated or "500" in translated:
+            return {"error": "Translation service temporarily busy. Please try again."}
 
         src_lang_name = "English" if is_eng else "Foreign Language"
         if not is_eng:
