@@ -1,21 +1,12 @@
 import os
-import re
 import io
 import time
 import asyncio
-import subprocess
-import sys
-
-try:
-    from groq import Groq
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "groq"])
-    from groq import Groq
-
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
+from googletrans import Translator
 from telegram import (
     Update,
     LabeledPrice,
@@ -33,7 +24,7 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-GROQ_API_KEY = "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"
+translator = Translator()
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -93,80 +84,35 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def _sync_groq_call(text, recent_languages=None, is_group=False):
-    if not GROQ_API_KEY:
-        return {"error": "Groq API Key is missing!"}
-
-    client = Groq(api_key=GROQ_API_KEY)
-    lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
-
-    if is_group:
-        system_instruction = (
-            "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
-            f"{lang_context}\n"
-            "Rules:\n"
-            "1. Accurately detect source language on the fly.\n"
-            "2. Adapt instantly to language shifts and cross-translate.\n"
-            "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-            "SRC: [Detected Source Language Name]\n"
-            "TRG: [Target Language Name]\n"
-            "TRANS: [Translated Text]\n"
-            "MEANING: [English meaning]\n"
-            "NATIVE_P: [Phonetic in native script]\n"
-            "LATIN_P: [Phonetic in English Latin alphabet]"
-        )
-        prompt = f"{system_instruction}\n\nGroup Message: \"{text}\""
-    else:
-        system_instruction = (
-            "You are a dedicated Personal Language Assistant and Tutor.\n"
-            "Rules:\n"
-            "1. Detect source language accurately.\n"
-            "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
-            "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-            "SRC: [Source Language Name]\n"
-            "TRG: [Target Language Name]\n"
-            "TRANS: [Translated Text]\n"
-            "MEANING: [English meaning]\n"
-            "NATIVE_P: [Phonetic in native script]\n"
-            "LATIN_P: [Phonetic in English Latin alphabet]"
-        )
-        prompt = f"{system_instruction}\n\nMessage: \"{text}\""
-
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            completion = client.chat.completions.create(
-                model="llama-3.1-8b-instant",
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3,
-            )
-            raw = completion.choices[0].message.content.strip()
-            parsed = {}
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
-
-            if parsed.get("trans"):
-                return parsed
-        except Exception as e:
-            err_str = str(e)
-            if "503" in err_str or "unavailable" in err_str.lower() or "429" in err_str:
-                time.sleep(1.5)
-                continue
-            return {"error": f"Groq Error: {err_str[:60]}"}
-
-    return {"error": "Groq Server Busy."}
-
 async def execute_translation(text, recent_languages=None, is_group=False):
-    return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
+    try:
+        # ഇംഗ്ലീഷ് ആണെങ്കിൽ മലയാളത്തിലേക്ക്, അല്ലെങ്കിൽ ഇംഗ്ലീഷിലേക്ക് മാറ്റുക
+        target_lang = "ml" if is_text_english(text) else "en"
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, translator.translate, text, target_lang)
+        
+        src_lang_name = result.src.upper()
+        trg_lang_name = "Malayalam" if target_lang == "ml" else "English"
+        translated_text = result.text
+
+        return {
+            "src": src_lang_name,
+            "trg": trg_lang_name,
+            "trans": translated_text,
+            "meaning": translated_text,
+            "native_p": "",
+            "latin_p": ""
+        }
+    except Exception as e:
+        return {"error": f"Translation Error: {str(e)[:50]}"}
+
+def is_text_english(text):
+    try:
+        text.encode(encoding='utf-8').decode('ascii')
+    except UnicodeDecodeError:
+        return False
+    else:
+        return True
 
 FREE_LIMIT = 100
 PLANS = {
@@ -230,7 +176,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "👤 <b>1. Personal Chat (Solo Tutor & Translator):</b>\n"
         "• Send any text in any language.\n"
-        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons to listen to both Source & Target languages in natural human voices (Edge-TTS & gTTS)!\n\n"
+        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons to listen to both Source & Target languages in natural human voices!\n\n"
         "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
         "• Add this bot to any group chat for instant multi-lingual shifting.\n\n"
         "<b>Commands:</b>\n"
@@ -285,8 +231,7 @@ async def custom_bg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not args:
         await update.message.reply_text(
             "🖼 <b>Custom Background Setup (VIP)</b>\n\n"
-            "Usage: <code>/custombg [GIF / Animation URL]</code>\n"
-            "Example: <code>/custombg https://media.giphy.com/media/...</code>",
+            "Usage: <code>/custombg [GIF / Animation URL]</code>",
             parse_mode="HTML"
         )
         return
@@ -322,11 +267,8 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.chat_data.get("paused", False): 
-        return
-
-    if not update.message or not update.message.text:
-        return
+    if context.chat_data.get("paused", False): return
+    if not update.message or not update.message.text: return
 
     user = update.effective_user
     user_id = str(user.id)
@@ -338,33 +280,21 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = update.message.text.strip()
-    placeholder = await update.message.reply_text("⚡ <i>Synthesizing Neural Translation...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("⚡ <i>Translating...</i>", parse_mode="HTML")
 
     chat_type = update.effective_chat.type
     is_group = chat_type in ["group", "supergroup"]
 
-    if "group_lang_memory" not in context.chat_data:
-        context.chat_data["group_lang_memory"] = []
-
-    recent_langs = context.chat_data["group_lang_memory"]
-
-    res = await execute_translation(text, recent_languages=recent_langs, is_group=is_group)
+    res = await execute_translation(text, is_group=is_group)
 
     if "error" in res:
-        await placeholder.edit_text(f"⚠️ <b>Neural Error:</b> {res['error']}", parse_mode="HTML")
+        await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
     src_lang = res.get("src", "Auto")
     trg_lang = res.get("trg", "English")
     translation = res.get("trans", text)
     meaning_en = res.get("meaning", text)
-    native_p = res.get("native_p", "")
-    latin_p = res.get("latin_p", "")
-
-    if src_lang not in recent_langs:
-        recent_langs.append(src_lang)
-        if len(recent_langs) > 4:
-            recent_langs.pop(0)
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
@@ -385,10 +315,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quote_symbol = "💬 "
         status_line = f"🔋 Quota: {status_val}"
 
-    native_block = f"🗣 <i>Phonetic ({trg_lang}):</i>\n<code>{native_p}</code>\n" if native_p else ""
-    latin_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
-    meaning_block = f"📖 <i>Meaning (EN):</i> <b>{meaning_en}</b>\n" if meaning_en else ""
-
     mode_label = "🌐 Group Live Neural Bridge" if is_group else "💠 Personal Neural Tutor"
 
     card_text = (
@@ -396,12 +322,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👤 <b>{user_name}</b> ➔ <i>{mode_label}</i>\n"
         f"────────────────────────\n"
         f"{src_info['flag']} <code>{src_lang.upper()}</code>  <b>⚡ SHIFT SYNC ⚡</b>  {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
-        f"📍 <i>{src_info['loc']}</i> ⟷ <i>{trg_info['loc']}</i>\n"
         f"────────────────────────\n\n"
         f"<blockquote>{quote_symbol}<b>{translation}</b></blockquote>\n\n"
-        f"{native_block}"
-        f"{latin_block}"
-        f"{meaning_block}\n"
+        f"📖 <i>Meaning:</i> {meaning_en}\n\n"
         f"────────────────────────\n"
         f"⚡ {status_line}"
     )
@@ -427,42 +350,35 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(f"🔊 {trg_info['flag']} Listen ({trg_lang})", callback_data=f"play_trg_{msg_id}")
         ]
     ]
-    if is_vip:
-        keyboard.append([InlineKeyboardButton("🐢 Slow-Mo Matrix (0.75x)", callback_data=f"slow_trg_{msg_id}")])
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🎧 Synthesizing HD Audio Stream...")
+    await query.answer("🎧 Generating Audio...")
     data = query.data
 
-    is_slow = "slow_" in data
     if "src_" in data:
         msg_id = data.replace("play_src_", "")
         cache = context.bot_data.get(f"aud_src_{msg_id}")
     else:
-        msg_id = data.replace("slow_trg_", "").replace("play_trg_", "")
+        msg_id = data.replace("play_trg_", "")
         cache = context.bot_data.get(f"aud_trg_{msg_id}")
 
     if not cache:
-        await query.answer("Audio session expired. Send a new message!", show_alert=True)
+        await query.answer("Session expired!", show_alert=True)
         return
 
     text_to_speak = cache["text"]
     voice_edge = cache.get("voice_edge")
     gtts_code = cache.get("gtts_code", "en")
-    rate_str = "-25%" if is_slow else "+0%"
-
     temp_audio_file = f"speech_{msg_id}.mp3"
-    speed_label = "Slow-Mo" if is_slow else "HD Native"
-    caption = f"🔊 <b>{speed_label} Audio ({cache['lang']}):</b>\n<i>\"{text_to_speak}\"</i>"
 
     try:
         worked = False
         if voice_edge:
             try:
-                communicate = edge_tts.Communicate(text_to_speak, voice_edge, rate=rate_str)
+                communicate = edge_tts.Communicate(text_to_speak, voice_edge)
                 await communicate.save(temp_audio_file)
                 if os.path.exists(temp_audio_file) and os.path.getsize(temp_audio_file) > 500:
                     worked = True
@@ -471,23 +387,14 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if not worked:
             def _generate_gtts():
-                tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
+                tts = gTTS(text=text_to_speak, lang=gtts_code, slow=False)
                 tts.save(temp_audio_file)
             await asyncio.to_thread(_generate_gtts)
 
         with open(temp_audio_file, "rb") as audio:
-            await context.bot.send_voice(
-                chat_id=query.message.chat_id,
-                voice=audio,
-                caption=caption,
-                parse_mode="HTML"
-            )
-
+            await context.bot.send_voice(chat_id=query.message.chat_id, voice=audio)
     except Exception as e:
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=f"⚠️ Audio error: {str(e)[:60]}"
-        )
+        await context.bot.send_message(chat_id=query.message.chat_id, text=f"⚠️ Audio error")
     finally:
         if os.path.exists(temp_audio_file):
             try: os.remove(temp_audio_file)
@@ -549,7 +456,7 @@ async def main():
     app.add_handler(CommandHandler("premium", premium_command))
 
     app.add_handler(CallbackQueryHandler(plan_selection_callback, pattern="^buy_"))
-    app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^(play_|slow_)"))
+    app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^play_"))
     app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
@@ -557,10 +464,8 @@ async def main():
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
     await app.initialize()
-    try: 
-        await app.bot.delete_webhook(drop_pending_updates=True)
-    except Exception: 
-        pass
+    try: await app.bot.delete_webhook(drop_pending_updates=True)
+    except Exception: pass
         
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
@@ -569,7 +474,5 @@ async def main():
     await stop_event.wait()
 
 if __name__ == "__main__":
-    try: 
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit): 
-        pass
+    try: asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit): pass
