@@ -4,3 +4,4 @@ gtts
 edge-tts
 aiohttp
 deep-translator
+
