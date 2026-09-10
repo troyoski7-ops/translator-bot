@@ -1,17 +1,8 @@
 import os
-import re
 import io
 import time
 import asyncio
-import subprocess
-import sys
-
-try:
-    import google.generativeai as genai
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "google-generativeai"])
-    import google.generativeai as genai
-
+import aiohttp
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
@@ -33,12 +24,6 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-
-# താങ്കൾ നൽകിയ കീ ഇവിടെ കൃത്യമായി ചേർത്തിട്ടുണ്ട്:
-GEMINI_API_KEY = "AQ.Ab8RN6LaOxKhnSuiVOe1SKYVgLMBDn2E9uSi9SSPKZl3w5V4Wg"
-
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -98,73 +83,37 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def _sync_gemini_call(text, recent_languages=None, is_group=False):
-    if not GEMINI_API_KEY:
-        return {"error": "GEMINI_API_KEY is not configured!"}
-
-    lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
-
-    if is_group:
-        system_instruction = (
-            "You are an active live 2-way conversation interpreter inside a Telegram Group.\n"
-            f"{lang_context}\n"
-            "Rules:\n"
-            "1. Accurately detect source language on the fly.\n"
-            "2. Adapt instantly to language shifts and cross-translate.\n"
-            "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-            "SRC: [Detected Source Language Name]\n"
-            "TRG: [Target Language Name]\n"
-            "TRANS: [Translated Text]\n"
-            "MEANING: [English meaning]\n"
-            "NATIVE_P: [Phonetic in native script]\n"
-            "LATIN_P: [Phonetic in English Latin alphabet]"
-        )
-        prompt = f"{system_instruction}\n\nGroup Message: \"{text}\""
-    else:
-        system_instruction = (
-            "You are a dedicated Personal Language Assistant and Tutor.\n"
-            "Rules:\n"
-            "1. Detect source language accurately.\n"
-            "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
-            "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-            "SRC: [Source Language Name]\n"
-            "TRG: [Target Language Name]\n"
-            "TRANS: [Translated Text]\n"
-            "MEANING: [English meaning]\n"
-            "NATIVE_P: [Phonetic in native script]\n"
-            "LATIN_P: [Phonetic in English Latin alphabet]"
-        )
-        prompt = f"{system_instruction}\n\nMessage: \"{text}\""
-
-    max_retries = 3
-    for attempt in range(max_retries):
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(prompt)
-            raw = response.text.strip()
-            parsed = {}
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
-
-            if parsed.get("trans") and "Translation text" not in parsed.get("trans", ""):
-                return parsed
-        except Exception as e:
-            err_str = str(e)
-            if "503" in err_str or "unavailable" in err_str.lower():
-                time.sleep(1.5)
-                continue
-            return {"error": f"Gemini Error: {err_str[:60]}"}
-
-    return {"error": "Gemini Server Busy."}
-
 async def execute_translation(text, recent_languages=None, is_group=False):
-    return await asyncio.to_thread(_sync_gemini_call, text, recent_languages, is_group)
+    # കീയുടെ ആവശ്യമില്ലാത്ത പബ്ലിക് ഫ്രീ ട്രാൻസ്‌ലേഷൻ സിസ്റ്റം
+    target_lang = "ml" if is_text_english(text) else "en"
+    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target_lang}&dt=t&q={text}"
+    
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    translated_text = data[0][0][0]
+                    detected_lang = data[2] if len(data) > 2 else "auto"
+                    return {
+                        "src": detected_lang.upper(),
+                        "trg": "Malayalam" if target_lang == "ml" else "English",
+                        "trans": translated_text,
+                        "meaning": translated_text,
+                        "native_p": "",
+                        "latin_p": ""
+                    }
+        except Exception as e:
+            return {"error": f"Translation error: {str(e)[:50]}"}
+    return {"error": "Translation failed."}
+
+def is_text_english(text):
+    try:
+        text.encode(encoding='utf-8').decode('ascii')
+    except UnicodeDecodeError:
+        return False
+    else:
+        return True
 
 FREE_LIMIT = 100
 PLANS = {
@@ -193,12 +142,12 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
         "Free translation quota exhausted!\n\n"
-        "• Unlimited Text Translations (Group & Solo)\n"
-        "• High-Definition Dual Audio Pronunciations (Source & Target)\n"
-        "• Secret VIP Luxury Themes & Custom Backgrounds\n\n"
+        "• Unlimited Text Translations\n"
+        "• High-Definition Dual Audio Pronunciations\n"
+        "• Secret VIP Luxury Themes\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
-        "• <b>3 Months ELITE:</b> 120 Stars <i>(20% Off)</i>\n"
-        "• <b>1 Year LEGEND:</b> 399 Stars <i>(Best Value!)</i>"
+        "• <b>3 Months ELITE:</b> 120 Stars\n"
+        "• <b>1 Year LEGEND:</b> 399 Stars"
     )
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔥 1 Month (50 Stars)", callback_data="buy_sub_1m")],
@@ -214,29 +163,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
     _, _, is_vip = is_user_active(context, user_id)
-
-    custom_bg = context.chat_data.get("user_custom_bg", {}).get(user_id)
-    selected_theme = context.chat_data.get("user_theme", {}).get(user_id, "chibi")
-    active_theme = ALL_THEMES.get(selected_theme, STANDARD_THEMES["chibi"])
+    active_theme = STANDARD_THEMES["chibi"]
+    bg_url = active_theme["url"]
     
-    bg_url = custom_bg if (custom_bg and is_vip) else active_theme["url"]
-    vip_badge = "🌟 <b>VIP HOLOGRAPHIC SHIELD ACTIVE</b>\n" if is_vip else ""
-
     welcome = (
-        f"🌌 <b>QUANTUM POLYGLOT NEURAL BRIDGE</b> 🌌\n"
-        f"{vip_badge}\n"
-        "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
-        "👤 <b>1. Personal Chat (Solo Tutor & Translator):</b>\n"
-        "• Send any text in any language.\n"
-        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons to listen to both Source & Target languages in natural human voices (Edge-TTS & gTTS)!\n\n"
-        "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
-        "• Add this bot to any group chat for instant multi-lingual shifting.\n\n"
-        "<b>Commands:</b>\n"
-        "🎨 /theme • Holographic UI Theme\n"
-        "🖼 /custombg [URL] • Set Custom VIP Background GIF\n"
-        "📊 /status • Quota & Core Status\n"
-        "⏸ /stop • Pause | ▶️ /resume • Resume\n"
-        "⭐️ /premium • VIP Vault\n\n"
+        f"🌌 <b>QUANTUM TRANSLATOR BRIDGE</b> 🌌\n\n"
+        "✨ Send any text in English to translate to Malayalam, or any other language to translate to English!\n"
+        "🔊 Dual Audio buttons included for pronunciation.\n\n"
         "Send any text to begin!"
     )
     try:
@@ -244,87 +177,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text(welcome, parse_mode="HTML")
 
-async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    _, _, is_vip = is_user_active(context, user_id)
-    keyboard = []
-    for key, item in STANDARD_THEMES.items():
-        keyboard.append([InlineKeyboardButton(item["label"], callback_data=f"settheme_{key}")])
-    for key, item in PREMIUM_THEMES.items():
-        label = f"✨ {item['label']}" if is_vip else f"🔒 {item['label']} [VIP]"
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"settheme_{key}")])
-    await update.message.reply_text("🎨 <b>Select Holographic Theme:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
-
-async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    theme_key = query.data.replace("settheme_", "")
-    user_id = str(update.effective_user.id)
-    _, _, is_vip = is_user_active(context, user_id)
-
-    selected = ALL_THEMES.get(theme_key)
-    if not selected: return
-    if selected.get("vip") and not is_vip:
-        await query.answer("🔒 VIP Locked! Upgrade with Telegram Stars.", show_alert=True)
-        return
-    if "user_theme" not in context.chat_data: context.chat_data["user_theme"] = {}
-    context.chat_data["user_theme"][user_id] = theme_key
-    await query.edit_message_text(f"✨ Holographic theme updated to:\n<b>{selected['label']}</b>", parse_mode="HTML")
-
-async def custom_bg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    _, _, is_vip = is_user_active(context, user_id)
-    
-    if not is_vip:
-        await update.message.reply_text("🔒 <b>VIP Exclusive Feature!</b>\n\nCustom background GIFs are unlocked only for VIP/Legend subscribers. Use /premium to upgrade!", parse_mode="HTML")
-        return
-
-    args = context.args
-    if not args:
-        await update.message.reply_text(
-            "🖼 <b>Custom Background Setup (VIP)</b>\n\n"
-            "Usage: <code>/custombg [GIF / Animation URL]</code>\n"
-            "Example: <code>/custombg https://media.giphy.com/media/...</code>",
-            parse_mode="HTML"
-        )
-        return
-    
-    custom_url = args[0]
-    if "user_custom_bg" not in context.chat_data:
-        context.chat_data["user_custom_bg"] = {}
-        
-    context.chat_data["user_custom_bg"][user_id] = custom_url
-    await update.message.reply_text("✅ <b>Custom VIP Background GIF successfully saved!</b> Use /start to see your new welcome animation.", parse_mode="HTML")
-
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    _, status_val, _ = is_user_active(context, user_id)
-    state = "⏸ Paused" if context.chat_data.get("paused", False) else "🟢 Online & Syncing"
-    await update.message.reply_text(
-        f"📊 <b>CORE STATUS</b>\n\n"
-        f"🔋 Neural Quota: {status_val}\n"
-        f"⚡ Bridge State: {state}\n\n"
-        f"<i>Unlock unlimited bandwidth & custom themes via /premium</i>",
-        parse_mode="HTML"
-    )
-
-async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.chat_data["paused"] = True
-    await update.message.reply_text("⏸ <b>Neural Bridge Paused!</b> Send /resume to reactivate.", parse_mode="HTML")
-
-async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.chat_data["paused"] = False
-    await update.message.reply_text("▶️ <b>Neural Bridge Resumed!</b> Synchronizing ⚡", parse_mode="HTML")
-
-async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_store_menu(update.effective_chat.id, context)
-
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.chat_data.get("paused", False): 
-        return
-
-    if not update.message or not update.message.text:
-        return
+    if context.chat_data.get("paused", False): return
+    if not update.message or not update.message.text: return
 
     user = update.effective_user
     user_id = str(user.id)
@@ -336,229 +191,94 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = update.message.text.strip()
-    placeholder = await update.message.reply_text("⚡ <i>Synthesizing Neural Translation...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("⚡ <i>Translating...</i>", parse_mode="HTML")
 
-    chat_type = update.effective_chat.type
-    is_group = chat_type in ["group", "supergroup"]
-
-    if "group_lang_memory" not in context.chat_data:
-        context.chat_data["group_lang_memory"] = []
-
-    recent_langs = context.chat_data["group_lang_memory"]
-
-    res = await execute_translation(text, recent_languages=recent_langs, is_group=is_group)
+    res = await execute_translation(text)
 
     if "error" in res:
-        await placeholder.edit_text(f"⚠️ <b>Neural Error:</b> {res['error']}", parse_mode="HTML")
+        await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
     src_lang = res.get("src", "Auto")
-    trg_lang = res.get("trg", "English")
+    trg_lang = res.get("trg", "Malayalam")
     translation = res.get("trans", text)
-    meaning_en = res.get("meaning", text)
-    native_p = res.get("native_p", "")
-    latin_p = res.get("latin_p", "")
-
-    if src_lang not in recent_langs:
-        recent_langs.append(src_lang)
-        if len(recent_langs) > 4:
-            recent_langs.pop(0)
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
         _, status_val, _ = is_user_active(context, user_id)
 
     src_info = get_voice_info(src_lang)
-    trg_info = get_voice_info(trg_lang)
-
-    user_theme_key = context.chat_data.get("user_theme", {}).get(user_id, "chibi")
-    active_theme = ALL_THEMES.get(user_theme_key, STANDARD_THEMES["chibi"])
-
-    if is_vip and active_theme.get("vip"):
-        vip_header = f"🔮 <b>{active_theme.get('badge')}</b>\n"
-        quote_symbol = active_theme.get("quote_prefix", "✨ ")
-        status_line = f"💎 <b>Quantum Priority</b> • {status_val}"
-    else:
-        vip_header = ""
-        quote_symbol = "💬 "
-        status_line = f"🔋 Quota: {status_val}"
-
-    native_block = f"🗣 <i>Phonetic ({trg_lang}):</i>\n<code>{native_p}</code>\n" if native_p else ""
-    latin_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
-    meaning_block = f"📖 <i>Meaning (EN):</i> <b>{meaning_en}</b>\n" if meaning_en else ""
-
-    mode_label = "🌐 Group Live Neural Bridge" if is_group else "💠 Personal Neural Tutor"
+    trg_info = get_voice_info("malayalam" if trg_lang == "Malayalam" else "english")
 
     card_text = (
-        f"{vip_header}"
-        f"👤 <b>{user_name}</b> ➔ <i>{mode_label}</i>\n"
+        f"👤 <b>{user_name}</b>\n"
         f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code>  <b>⚡ SHIFT SYNC ⚡</b>  {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
-        f"📍 <i>{src_info['loc']}</i> ⟷ <i>{trg_info['loc']}</i>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"────────────────────────\n\n"
-        f"<blockquote>{quote_symbol}<b>{translation}</b></blockquote>\n\n"
-        f"{native_block}"
-        f"{latin_block}"
-        f"{meaning_block}\n"
+        f"💬 <b>{translation}</b>\n\n"
         f"────────────────────────\n"
-        f"⚡ {status_line}"
+        f"🔋 Quota: {status_val}"
     )
 
     msg_id = placeholder.message_id
-    
-    context.bot_data[f"aud_src_{msg_id}"] = {
-        "text": text,
-        "voice_edge": src_info.get("edge"),
-        "gtts_code": src_info["gtts"],
-        "lang": src_lang
-    }
-    context.bot_data[f"aud_trg_{msg_id}"] = {
-        "text": translation,
-        "voice_edge": trg_info.get("edge"),
-        "gtts_code": trg_info["gtts"],
-        "lang": trg_lang
-    }
+    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "gtts_code": "en", "lang": src_lang}
+    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "gtts_code": "ml" if trg_lang == "Malayalam" else "en", "lang": trg_lang}
 
     keyboard = [
         [
-            InlineKeyboardButton(f"🔊 {src_info['flag']} Listen ({src_lang})", callback_data=f"play_src_{msg_id}"),
-            InlineKeyboardButton(f"🔊 {trg_info['flag']} Listen ({trg_lang})", callback_data=f"play_trg_{msg_id}")
+            InlineKeyboardButton(f"🔊 Listen (Source)", callback_data=f"play_src_{msg_id}"),
+            InlineKeyboardButton(f"🔊 Listen (Target)", callback_data=f"play_trg_{msg_id}")
         ]
     ]
-    if is_vip:
-        keyboard.append([InlineKeyboardButton("🐢 Slow-Mo Matrix (0.75x)", callback_data=f"slow_trg_{msg_id}")])
 
     await placeholder.edit_text(card_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🎧 Synthesizing HD Audio Stream...")
+    await query.answer("🎧 Generating Audio...")
     data = query.data
 
-    is_slow = "slow_" in data
     if "src_" in data:
         msg_id = data.replace("play_src_", "")
         cache = context.bot_data.get(f"aud_src_{msg_id}")
     else:
-        msg_id = data.replace("slow_trg_", "").replace("play_trg_", "")
+        msg_id = data.replace("play_trg_", "")
         cache = context.bot_data.get(f"aud_trg_{msg_id}")
 
     if not cache:
-        await query.answer("Audio session expired. Send a new message!", show_alert=True)
+        await query.answer("Session expired!", show_alert=True)
         return
 
     text_to_speak = cache["text"]
-    voice_edge = cache.get("voice_edge")
     gtts_code = cache.get("gtts_code", "en")
-    rate_str = "-25%" if is_slow else "+0%"
-
     temp_audio_file = f"speech_{msg_id}.mp3"
-    speed_label = "Slow-Mo" if is_slow else "HD Native"
-    caption = f"🔊 <b>{speed_label} Audio ({cache['lang']}):</b>\n<i>\"{text_to_speak}\"</i>"
 
     try:
-        worked = False
-        if voice_edge:
-            try:
-                communicate = edge_tts.Communicate(text_to_speak, voice_edge, rate=rate_str)
-                await communicate.save(temp_audio_file)
-                if os.path.exists(temp_audio_file) and os.path.getsize(temp_audio_file) > 500:
-                    worked = True
-            except Exception:
-                worked = False
-
-        if not worked:
-            def _generate_gtts():
-                tts = gTTS(text=text_to_speak, lang=gtts_code, slow=is_slow)
-                tts.save(temp_audio_file)
-            await asyncio.to_thread(_generate_gtts)
+        def _generate_gtts():
+            tts = gTTS(text=text_to_speak, lang=gtts_code, slow=False)
+            tts.save(temp_audio_file)
+        await asyncio.to_thread(_generate_gtts)
 
         with open(temp_audio_file, "rb") as audio:
-            await context.bot.send_voice(
-                chat_id=query.message.chat_id,
-                voice=audio,
-                caption=caption,
-                parse_mode="HTML"
-            )
-
+            await context.bot.send_voice(chat_id=query.message.chat_id, voice=audio)
     except Exception as e:
-        await context.bot.send_message(
-            chat_id=query.message.chat_id,
-            text=f"⚠️ Audio error: {str(e)[:60]}"
-        )
+        await context.bot.send_message(chat_id=query.message.chat_id, text=f"⚠️ Audio error")
     finally:
         if os.path.exists(temp_audio_file):
             try: os.remove(temp_audio_file)
             except Exception: pass
 
-async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    plan_key = query.data.replace("buy_", "")
-    if plan_key not in PLANS: return
-    plan = PLANS[plan_key]
-
-    await context.bot.send_invoice(
-        chat_id=query.message.chat_id,
-        title=f"⭐️ {plan['name']}",
-        description=f"Unlock VIP features for {plan['days']} days.",
-        payload=plan_key,
-        provider_token="",
-        currency="XTR",
-        prices=[LabeledPrice(label=plan["name"], amount=plan["stars"])],
-    )
-
-async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.pre_checkout_query.answer(ok=True)
-
-async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    plan_key = update.message.successful_payment.invoice_payload
-    plan = PLANS.get(plan_key, PLANS["sub_1m"])
-
-    if "premium_expiry" not in context.chat_data: context.chat_data["premium_expiry"] = {}
-    if "vip_tier" not in context.chat_data: context.chat_data["vip_tier"] = {}
-
-    current_expiry_str = context.chat_data["premium_expiry"].get(user_id)
-    now = datetime.utcnow()
-    base_time = datetime.fromisoformat(current_expiry_str) if current_expiry_str and datetime.fromisoformat(current_expiry_str) > now else now
-
-    new_expiry = base_time + timedelta(days=plan["days"])
-    context.chat_data["premium_expiry"][user_id] = new_expiry.isoformat()
-    context.chat_data["vip_tier"][user_id] = plan["badge"]
-
-    gift_text = f"🎁 <b>VIP HOLOGRAPHIC PASS UNLOCKED!</b> ⭐️\n\n👑 <b>Tier:</b> {plan['name']}\n💎 <b>Badge:</b> {plan['badge']}"
-    try:
-        await update.message.reply_animation(animation=VIP_GIFT_STICKER, caption=gift_text, parse_mode="HTML")
-    except Exception:
-        await update.message.reply_text(gift_text, parse_mode="HTML")
-
 async def main():
     await start_web_server()
-
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("theme", theme_command))
-    app.add_handler(CommandHandler("custombg", custom_bg_command))
-    app.add_handler(CommandHandler("status", status_command))
-    app.add_handler(CommandHandler("stop", stop_command))
-    app.add_handler(CommandHandler("resume", resume_command))
-    app.add_handler(CommandHandler("premium", premium_command))
-
-    app.add_handler(CallbackQueryHandler(plan_selection_callback, pattern="^buy_"))
-    app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^(play_|slow_)"))
-    app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
-
+    app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^play_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
-    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
     await app.initialize()
-    try: 
-        await app.bot.delete_webhook(drop_pending_updates=True)
-    except Exception: 
-        pass
+    try: await app.bot.delete_webhook(drop_pending_updates=True)
+    except Exception: pass
         
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
@@ -567,7 +287,5 @@ async def main():
     await stop_event.wait()
 
 if __name__ == "__main__":
-    try: 
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit): 
-        pass
+    try: asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit): pass
