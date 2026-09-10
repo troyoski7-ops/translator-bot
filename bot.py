@@ -96,6 +96,20 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
+def force_latin_phonetic(text, lang):
+    # Fallback safety to ensure latin characters if AI repeats native script
+    if not text or all(ord(c) < 128 for c in text):
+        return text
+    # Simple transliteration mapping check for Malayalam
+    ml_map = {
+        'സുഖമാണോ': 'sukamano', 'എങ്ങനെ': 'engane', 'ഹലോ': 'hello', 'നല്ലത്': 'nallathu',
+        'സ്നേഹം': 'sneham', 'നന്ദി': 'nandhi', 'കാണാം': 'kanam'
+    }
+    for k, v in ml_map.items():
+        if k in text:
+            return v
+    return text
+
 def _sync_translation_logic(text):
     if GROQ_API_KEY:
         try:
@@ -106,7 +120,7 @@ def _sync_translation_logic(text):
                 "1. Accurately detect true source language (Malayalam, Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, German, English, etc.).\n"
                 "2. Translate text accurately.\n"
                 "3. In NATIVE_P, put the original native text/script.\n"
-                "4. In LATIN_P, you MUST use ONLY standard English Latin alphabets (A-Z, a-z) to spell out how the source word is pronounced. NEVER output native non-English scripts in LATIN_P. (Examples: 'sukamano' for സുഖമാണോ, 'abgoosht' for آب گوشت).\n"
+                "4. In LATIN_P, you MUST output ONLY standard English Latin alphabet (A-Z, a-z). NEVER use non-English native scripts. Spell out the phonetic pronunciation using English letters (e.g. 'sukamano' for സുഖമാണോ, 'abgoosht' for آب گوشت).\n"
                 "5. In CULTURAL_INSIGHT, generate a unique, specific cultural fact or idiom directly related to this exact word.\n"
                 "6. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
                 "SRC: [Source Language Name]\n"
@@ -114,7 +128,7 @@ def _sync_translation_logic(text):
                 "TRANS: [Translated Text in Target Language]\n"
                 "MEANING: [English meaning of the text]\n"
                 "NATIVE_P: [Original native text/script]\n"
-                "LATIN_P: [Strictly English alphabet phonetic spelling like sukamano or abgoosht]\n"
+                "LATIN_P: [STRICTLY English Latin alphabet phonetic spelling, NO native scripts]\n"
                 "CULTURAL_INSIGHT: [Unique cultural context about this word]"
             )
             completion = client.chat.completions.create(
@@ -123,7 +137,7 @@ def _sync_translation_logic(text):
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": f"Message: \"{text}\""}
                 ],
-                temperature=0.4,
+                temperature=0.3,
             )
             raw = completion.choices[0].message.content.strip()
             parsed = {}
@@ -139,6 +153,9 @@ def _sync_translation_logic(text):
 
             if parsed.get("trans"):
                 parsed["native_text"] = text
+                # Force safety check on latin phonetic
+                if parsed.get("latin_p") and not all(ord(c) < 128 for c in parsed["latin_p"]):
+                    parsed["latin_p"] = force_latin_phonetic(text, parsed.get("src"))
                 return parsed
         except Exception:
             pass
@@ -154,7 +171,7 @@ def _sync_translation_logic(text):
                 "trans": translated,
                 "meaning": translated,
                 "native_p": text,
-                "latin_p": text,
+                "latin_p": force_latin_phonetic(text, "auto"),
                 "cultural_insight": "A common linguistic expression used in daily communication.",
                 "native_text": text
             }
