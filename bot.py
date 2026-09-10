@@ -6,7 +6,6 @@ import asyncio
 import subprocess
 import sys
 
-# ആവശ്യമായ ലൈബ്രറി ഓട്ടോമാറ്റിക് ആയി ഇൻസ്റ്റാൾ ചെയ്യാൻ
 try:
     import google.generativeai as genai
 except ImportError:
@@ -34,8 +33,9 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-RAW_GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_API_KEY = re.sub(r'\s+', '', RAW_GEMINI_KEY)
+
+# താങ്കൾ നൽകിയ കീ ഇവിടെ കൃത്യമായി ചേർത്തിട്ടുണ്ട്:
+GEMINI_API_KEY = "AQ.Ab8RN6LaOxKhnSuiVOe1SKYVgLMBDn2E9uSi9SSPKZl3w5V4Wg"
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -100,7 +100,7 @@ def get_voice_info(lang_name):
 
 def _sync_gemini_call(text, recent_languages=None, is_group=False):
     if not GEMINI_API_KEY:
-        return {"error": "GEMINI_API_KEY is not configured in Render!"}
+        return {"error": "GEMINI_API_KEY is not configured!"}
 
     lang_context = f"Recent Group Languages Context: {recent_languages}" if recent_languages else ""
 
