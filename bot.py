@@ -79,21 +79,18 @@ VOICE_MAP = {
     "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
     "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
     "ukrainian": {"edge": "uk-UA-PolinaNeural", "gtts": "uk", "flag": "🇺🇦", "loc": "Kyiv"},
-    "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
-    "uzbek": {"edge": "uz-UZ-MadinaNeural", "gtts": "uz", "flag": "🇺🇿", "loc": "Tashkent"},
-    "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "loc": "Astana"},
-    "tajik": {"edge": "tg-TJ-GanjinaNeural", "gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
-    "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
+    "vietnamese": {"edge": "vi-VN-HoaiMyNeural", "gtts": "vi", "flag": "🇻🇳", "loc": "Hanoi"},
     "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
     "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
-    "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
+    "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
+    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
+    "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
     "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
     "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "loc": "London"},
     "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
     "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
-    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
-    "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
-    "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
+    "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
+    "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
 }
 
 def get_voice_info(lang_name):
@@ -103,42 +100,34 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def detect_language_smart(text):
-    if any(0x0D00 <= ord(c) <= 0x0D7F for c in text): return "Malayalam"
-    if any(0x0600 <= ord(c) <= 0x06FF for c in text): return "Persian"
-    if any(0x0400 <= ord(c) <= 0x04FF for c in text): return "Ukrainian"
-    
-    # Check common German words/markers
-    german_markers = ["mir", "geht", "es", "gut", "wie", "ist", "und", "hallo", "guten", "morgen", "danke"]
-    words = text.lower().split()
-    if any(w in german_markers for w in words): return "German"
-
-    try:
-        code = GoogleTranslator(source='auto', target='en').detect(text)
-        mapping = {
-            'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
-            'az': 'Azerbaijani', 'uz': 'Uzbek', 'kk': 'Kazakh', 'tg': 'Tajik',
-            'tr': 'Turkish', 'ar': 'Arabic', 'ru': 'Russian', 'en': 'English',
-            'hi': 'Hindi', 'fr': 'French', 'es': 'Spanish', 'zh': 'Chinese', 'ja': 'Japanese'
-        }
-        if code in mapping: return mapping[code]
-    except Exception:
-        pass
-
-    if all(ord(c) < 128 for c in text): return "English"
-    return "German"
-
 def smart_latin_fallback(text, lang):
     if not text: return "text"
     if all(ord(c) < 128 for c in text): return text
     if "സുഖ" in text or "ഹലോ" in text: return "sukamano" if "സുഖ" in text else "hallo"
     if "آب" in text or "گوشت" in text: return "abgoosht"
-    if lang.lower() == "german": return text.lower()
     clean = "".join([c for c in text if ord(c) < 128])
-    return clean.strip() if len(clean) > 1 else "pronunciation"
+    return clean.strip() if len(clean) > 1 else text.lower()
 
 def _sync_translation_logic(text):
-    detected_lang_name = detect_language_smart(text)
+    detected_lang_name = "English"
+    try:
+        code = GoogleTranslator(source='auto', target='en').detect(text)
+        mapping = {
+            'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
+            'vi': 'Vietnamese', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
+            'fr': 'French', 'es': 'Spanish', 'ru': 'Russian', 'en': 'English',
+            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish'
+        }
+        if code in mapping:
+            detected_lang_name = mapping[code]
+        else:
+            detected_lang_name = code.capitalize()
+    except Exception:
+        if any(0x0D00 <= ord(c) <= 0x0D7F for c in text): detected_lang_name = "Malayalam"
+        elif any(0x0600 <= ord(c) <= 0x06FF for c in text): detected_lang_name = "Persian"
+        elif all(ord(c) < 128 for c in text): detected_lang_name = "English"
+        else: detected_lang_name = "German"
+
     target_lang = "Malayalam" if detected_lang_name.lower() == "english" else "English"
 
     if GROQ_API_KEY:
