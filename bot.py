@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
-from deep_translator import GoogleTranslator
 from telegram import (
     Update,
     LabeledPrice,
@@ -85,26 +84,8 @@ def get_voice_info(lang_name):
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
 def _sync_translate(text):
-    target = "ml" if is_text_english(text) else "en"
-    trg_name = "Malayalam" if target == "ml" else "English"
-
-    # Primary Method: Deep Translator
     try:
-        translated = GoogleTranslator(source='auto', target=target).translate(text)
-        if translated:
-            return {
-                "src": "AUTO",
-                "trg": trg_name,
-                "trans": translated,
-                "meaning": translated,
-                "native_p": "",
-                "latin_p": ""
-            }
-    except Exception:
-        pass
-
-    # Secondary Fallback Method: Direct Google API
-    try:
+        target = "ml" if is_text_english(text) else "en"
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={requests.utils.quote(text)}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=5)
@@ -114,16 +95,15 @@ def _sync_translate(text):
             src_lang = data[2] if len(data) > 2 else "auto"
             return {
                 "src": src_lang.upper(),
-                "trg": trg_name,
+                "trg": "Malayalam" if target == "ml" else "English",
                 "trans": translated,
                 "meaning": translated,
-                "native_p": "",
-                "latin_p": ""
+                "native_p": translated,
+                "latin_p": text
             }
-    except Exception:
-        pass
-
-    return {"error": "Translation service busy. Please try again."}
+        return {"error": "Translation service busy."}
+    except Exception as e:
+        return {"error": f"Error: {str(e)[:40]}"}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_translate, text)
