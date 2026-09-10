@@ -528,7 +528,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
-    app.add_handlers(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
     await app.initialize()
     try: await app.bot.delete_webhook(drop_pending_updates=True)
@@ -537,8 +537,8 @@ async def main():
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
 
-    stop_event = asyncio.Event()
-    await stop_event.wait()
+    stop_exp = asyncio.Event()
+    await stop_exp.wait()
 
 if __name__ == "__main__":
     try: asyncio.run(main())
