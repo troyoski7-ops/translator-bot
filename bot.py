@@ -104,6 +104,7 @@ def smart_latin_fallback(text):
 
 def _sync_translation_logic(text):
     try:
+        # ഇംഗ്ലീഷ് ആണെങ്കിൽ മലയാളത്തിലേക്കും, അല്ലാത്തപക്ഷം ഇംഗ്ലീഷിലേക്കും മാറ്റുക
         is_eng = all(ord(c) < 128 for c in text)
         target_code = 'ml' if is_eng else 'en'
         target_lang_name = "Malayalam" if is_eng else "English"
@@ -112,15 +113,16 @@ def _sync_translation_logic(text):
         if not translated:
             return {"error": "Translation failed."}
 
-        # Source language detection name mapping
-        detected_code = GoogleTranslator(source='auto', target='en').detect(text)
-        mapping = {
-            'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
-            'vi': 'Vietnamese', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
-            'fr': 'French', 'es': 'Spanish', 'ru': 'Russian', 'en': 'English',
-            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish'
-        }
-        src_lang_name = mapping.get(detected_code, "English" if is_eng else "Foreign Language")
+        src_lang_name = "English" if is_eng else "Foreign Language"
+        if not is_eng:
+            if any(0x0D00 <= ord(c) <= 0x0D7F for c in text):
+                src_lang_name = "Malayalam"
+            elif any(0x0400 <= ord(c) <= 0x04FF for c in text):
+                src_lang_name = "Russian"
+            elif any(0x0600 <= ord(c) <= 0x06FF for c in text):
+                src_lang_name = "Persian"
+            else:
+                src_lang_name = "German/Other"
 
         return {
             "src": src_lang_name,
@@ -129,7 +131,7 @@ def _sync_translation_logic(text):
             "meaning": translated,
             "native_p": text,
             "latin_p": smart_latin_fallback(text),
-            "cultural_insight": f"An expression commonly used in {src_lang_name}.",
+            "cultural_insight": f"An expression commonly used.",
             "native_text": text
         }
     except Exception as e:
@@ -310,7 +312,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(ogg_path)
         subprocess.run(["ffmpeg", "-y", "-i", ogg_path, mp3_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        # Whisper transcription using OpenAI/Groq if needed, or simple fallback
         trans_text = "Voice message translation"
         await placeholder.delete()
         await process_and_reply(update, context, trans_text)
@@ -363,7 +364,21 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
         f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['flag']}</code>\n"
+        f"────────────────────────\n\n"
+        f"💬 <b>{translation}</b>\n\n"
+        f"{native_p_block}"
+        f"{latin_p_block}"
+        f"{meaning_en_block}"
+        f"{cultural_block}\n"
+        f"────────────────────────\n"
+        f"🔋 Quota: {status_val}"
+    )
+
+    card_text = (
+        f"👤 <b>{user_name}</b>\n"
+        f"────────────────────────\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['flag']}</code>\n"
         f"────────────────────────\n\n"
         f"💬 <b>{translation}</b>\n\n"
         f"{native_p_block}"
