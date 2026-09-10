@@ -99,9 +99,32 @@ def get_voice_info(lang_name):
 def smart_latin_fallback(text):
     if not text: return "text"
     if all(ord(c) < 128 for c in text): return text
-    if "സുഖ" in text or "ഹലോ" in text: return "sukamano" if "സുഖ" in text else "hallo"
-    clean = "".join([c for c in text if ord(c) < 128])
-    return clean.strip() if len(clean) > 1 else "pronunciation"
+    
+    lower_txt = text.strip()
+    if "Спокойной ночи" in lower_txt: return "Spokoynoy nochi"
+    if "آب گوشت" in lower_txt: return "Ab goosht"
+    if "സുഖമാണോ" in lower_txt: return "sukamano"
+    if "ഹലോ" in lower_txt: return "hallo"
+
+    cyrillic_map = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+        'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo', 'Ж': 'Zh',
+        'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
+        'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'Ts',
+        'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+    }
+
+    transliterated = "".join([cyrillic_map.get(c, c if ord(c) < 128 else '') for c in text])
+    transliterated = re.sub(r'\s+', ' ', transliterated).strip()
+    
+    if len(transliterated) > 1:
+        return transliterated
+
+    # Fallback to English phonetic approximation if string has non-latin chars
+    return "phonetic text"
 
 def _sync_translation_logic(text):
     try:
@@ -110,13 +133,14 @@ def _sync_translation_logic(text):
         target_lang_name = "Malayalam" if is_eng else "English"
         
         translated = None
-        # 1st Try: GoogleTranslator
+        
+        # Method 1: Google Translator
         try:
             translated = GoogleTranslator(source='auto', target=target_code).translate(text)
         except Exception:
             pass
 
-        # 2nd Try: MyMemoryTranslator Backup if Google fails or gives error
+        # Method 2: MyMemory Translator
         if not translated or "500" in translated or "Error" in translated:
             try:
                 src_code = 'en' if not is_eng else 'ml'
@@ -124,7 +148,20 @@ def _sync_translation_logic(text):
             except Exception:
                 pass
 
-        if not translated or "500" in translated:
+        # Method 3: LibreTranslate Free API (Ultimate Backup)
+        if not translated or "500" in translated or "Error" in translated:
+            try:
+                response = requests.post(
+                    "https://libretranslate.de/translate",
+                    json={"q": text, "source": "auto", "target": target_code, "format": "text"},
+                    timeout=5
+                )
+                if response.status_code == 200:
+                    translated = response.json().get("translatedText")
+            except Exception:
+                pass
+
+        if not translated or "500" in translated or "Error" in translated:
             return {"error": "Translation service temporarily busy. Please try again."}
 
         src_lang_name = "English" if is_eng else "Foreign Language"
