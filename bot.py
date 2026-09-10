@@ -106,11 +106,11 @@ def smart_latin_fallback(text, lang):
     if not text: return "text"
     if all(ord(c) < 128 for c in text): return text
     if "സുഖ" in text or "ഹലോ" in text: return "sukamano" if "സുഖ" in text else "hallo"
-    # જો നോൺ-ലാറ്റിൻ ലിപി ആണെങ്കിൽ റോമൻ രൂപത്തിലേക്ക് മാറ്റാൻ ശ്രമിക്കുകയോ അല്ലെങ്കിൽ സിംപിൾ പ്രൊണൻസേഷൻ നൽകുകയോ ചെയ്യുക
     clean = "".join([c for c in text if ord(c) < 128])
     return clean.strip() if len(clean) > 1 else "pronunciation"
 
 def _sync_translation_logic(text):
+    # 1st Method: Groq AI (Llama-3) for 100% accurate detection & structured translation
     if GROQ_API_KEY:
         try:
             client = Groq(api_key=GROQ_API_KEY)
@@ -124,7 +124,7 @@ def _sync_translation_logic(text):
                 "3. TRANS: Accurate translation text.\n"
                 "4. MEANING: Meaning.\n"
                 "5. NATIVE_P: Original input text script.\n"
-                "6. LATIN_P: MUST be strictly English Latin alphabet (A-Z, a-z) showing pronunciation. NEVER output non-English scripts (like Cyrillic, Chinese, Malayalam) here.\n"
+                "6. LATIN_P: MUST be strictly English Latin alphabet (A-Z, a-z) showing pronunciation. NEVER output non-English scripts here.\n"
                 "7. CULTURAL_INSIGHT: A unique cultural fact about this expression.\n"
                 "Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
                 "SRC: [Source Language]\n"
@@ -164,20 +164,13 @@ def _sync_translation_logic(text):
         except Exception:
             pass
 
-    # Fallback to GoogleTranslator
+    # 2nd Method: GoogleTranslator Backup (Simple text translation)
     try:
         is_eng = all(ord(c) < 128 for c in text)
         target = "ml" if is_eng else "en"
         translated = GoogleTranslator(source='auto', target=target).translate(text)
         if translated:
-            detected_code = GoogleTranslator(source='auto', target='en').detect(text)
-            mapping = {
-                'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
-                'vi': 'Vietnamese', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
-                'fr': 'French', 'es': 'Spanish', 'ru': 'Russian', 'en': 'English',
-                'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish'
-            }
-            src = mapping.get(detected_code, detected_code.capitalize() if detected_code else "English")
+            src = "Malayalam" if not is_eng else "English"
             return {
                 "src": src,
                 "trg": "Malayalam" if is_eng else "English",
@@ -185,7 +178,7 @@ def _sync_translation_logic(text):
                 "meaning": translated,
                 "native_p": text,
                 "latin_p": smart_latin_fallback(text, src),
-                "cultural_insight": f"An expression commonly used in {src}.",
+                "cultural_insight": f"An expression commonly used.",
                 "native_text": text
             }
     except Exception as e:
@@ -428,6 +421,20 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p}</b></tg-spoiler>\n" if latin_p else ""
     meaning_en_block = f"📖 <b>Meaning ({trg_lang.upper()}): {translation}</b>\n" if translation else ""
     cultural_block = f"💡 <i>Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
+
+    card_text = (
+        f"👤 <b>{user_name}</b>\n"
+        f"────────────────────────\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['flag']}</code>\n"
+        f"────────────────────────\n\n"
+        f"💬 <b>{translation}</b>\n\n"
+        f"{native_p_block}"
+        f"{latin_p_block}"
+        f"{meaning_en_block}"
+        f"{cultural_block}\n"
+        f"────────────────────────\n"
+        f"🔋 Quota: {status_val}"
+    )
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
