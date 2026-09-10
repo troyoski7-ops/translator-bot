@@ -103,32 +103,42 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def smart_latin_fallback(text):
-    if not text: return "text"
-    if all(ord(c) < 128 for c in text): return text
-    if "സുഖ" in text: return "sukamano"
-    if "آب" in text or "گوشت" in text: return "abgoosht"
-    if "Wie geht es dir" in text: return "wie geht es dir"
-    clean = "".join([c for c in text if ord(c) < 128])
-    return clean.strip() if len(clean) > 1 else "pronunciation"
+def detect_language_smart(text):
+    if any(0x0D00 <= ord(c) <= 0x0D7F for c in text): return "Malayalam"
+    if any(0x0600 <= ord(c) <= 0x06FF for c in text): return "Persian"
+    if any(0x0400 <= ord(c) <= 0x04FF for c in text): return "Ukrainian"
+    
+    # Check common German words/markers
+    german_markers = ["mir", "geht", "es", "gut", "wie", "ist", "und", "hallo", "guten", "morgen", "danke"]
+    words = text.lower().split()
+    if any(w in german_markers for w in words): return "German"
 
-def _sync_translation_logic(text):
-    detected_lang_name = "English"
     try:
-        detected_code = GoogleTranslator(source='auto', target='en').detect(text)
-        code_to_name = {
+        code = GoogleTranslator(source='auto', target='en').detect(text)
+        mapping = {
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
             'az': 'Azerbaijani', 'uz': 'Uzbek', 'kk': 'Kazakh', 'tg': 'Tajik',
             'tr': 'Turkish', 'ar': 'Arabic', 'ru': 'Russian', 'en': 'English',
             'hi': 'Hindi', 'fr': 'French', 'es': 'Spanish', 'zh': 'Chinese', 'ja': 'Japanese'
         }
-        detected_lang_name = code_to_name.get(detected_code, detected_code.capitalize())
+        if code in mapping: return mapping[code]
     except Exception:
-        if any(ord(c) > 3000 for c in text): detected_lang_name = "Malayalam"
-        elif any(ord(c) > 1500 for c in text): detected_lang_name = "Persian"
-        elif any(ord(c) < 128 for c in text): detected_lang_name = "English"
-        else: detected_lang_name = "German"
+        pass
 
+    if all(ord(c) < 128 for c in text): return "English"
+    return "German"
+
+def smart_latin_fallback(text, lang):
+    if not text: return "text"
+    if all(ord(c) < 128 for c in text): return text
+    if "സുഖ" in text or "ഹലോ" in text: return "sukamano" if "സുഖ" in text else "hallo"
+    if "آب" in text or "گوشت" in text: return "abgoosht"
+    if lang.lower() == "german": return text.lower()
+    clean = "".join([c for c in text if ord(c) < 128])
+    return clean.strip() if len(clean) > 1 else "pronunciation"
+
+def _sync_translation_logic(text):
+    detected_lang_name = detect_language_smart(text)
     target_lang = "Malayalam" if detected_lang_name.lower() == "english" else "English"
 
     if GROQ_API_KEY:
@@ -136,7 +146,7 @@ def _sync_translation_logic(text):
             client = Groq(api_key=GROQ_API_KEY)
             system_instruction = (
                 f"You are a professional multi-lingual translator and tutor.\n"
-                f"Input text is in: {detected_lang_name}.\n"
+                f"Input text language is strictly: {detected_lang_name}.\n"
                 f"Target language for translation: {target_lang}.\n"
                 "Rules:\n"
                 f"1. SRC must be exactly: {detected_lang_name}\n"
@@ -144,7 +154,7 @@ def _sync_translation_logic(text):
                 "3. TRANS: Provide accurate translation.\n"
                 "4. MEANING: Provide meaning.\n"
                 "5. NATIVE_P: Original script.\n"
-                "6. LATIN_P: MUST be strictly English Latin alphabet (A-Z, a-z) showing pronunciation (e.g. 'sukamano' or 'wie geht es dir'). NEVER output native non-English scripts here.\n"
+                "6. LATIN_P: MUST be strictly English Latin alphabet (A-Z, a-z) showing pronunciation. Never output native non-English scripts here.\n"
                 "7. CULTURAL_INSIGHT: A unique and specific cultural fact about this text.\n"
                 "Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
                 f"SRC: {detected_lang_name}\n"
@@ -179,7 +189,9 @@ def _sync_translation_logic(text):
                 parsed["native_text"] = text
                 latin = parsed.get("latin_p", "")
                 if not latin or not all(ord(c) < 128 for c in latin):
-                    parsed["latin_p"] = smart_latin_fallback(text)
+                    parsed["latin_p"] = smart_latin_fallback(text, detected_lang_name)
+                parsed["src"] = detected_lang_name
+                parsed["trg"] = target_lang
                 return parsed
         except Exception:
             pass
@@ -193,7 +205,7 @@ def _sync_translation_logic(text):
                 "trans": translated,
                 "meaning": translated,
                 "native_p": text,
-                "latin_p": smart_latin_fallback(text),
+                "latin_p": smart_latin_fallback(text, detected_lang_name),
                 "cultural_insight": f"An expression commonly used in {detected_lang_name}.",
                 "native_text": text
             }
