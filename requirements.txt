@@ -1,13 +1,5 @@
-google-generativeai
+groq
 python-telegram-bot
 gtts
 edge-tts
 aiohttp
-
-
-
-
-
-
-
-
