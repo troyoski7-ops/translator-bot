@@ -5,13 +5,17 @@ import time
 import asyncio
 import subprocess
 import sys
-import requests
+
+try:
+    from groq import Groq
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "groq"])
+    from groq import Groq
 
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
-from deep_translator import GoogleTranslator, MyMemoryTranslator
 from telegram import (
     Update,
     LabeledPrice,
@@ -29,6 +33,7 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+GROQ_API_KEY = "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"
 
 # നിങ്ങളുടെ ടെലഗ്രാം യൂസർ ഐഡി (Owner ID)
 OWNER_USER_ID = 1689374364
@@ -126,53 +131,47 @@ def smart_latin_fallback(text):
     return "ab goosht" if "آب گوشت" in text else "phonetic text"
 
 def _sync_translation_logic(text):
-    is_eng = all(ord(c) < 128 for c in text)
-    target_lang = 'DE' if is_eng else 'EN' # Using DeepL language codes (Malayalam not natively in DeepL free endpoint, fallback to MyMemory/Google if needed)
-    
-    translated = None
-    
-    # Method 1: MyMemory Translator (Extremely reliable for Malayalam & all languages)
     try:
-        src_code = 'en' if not is_eng else 'ml'
-        target_code = 'ml' if is_eng else 'en'
-        translated = MyMemoryTranslator(source=src_code, target=target_code).translate(text)
-    except Exception:
-        pass
+        client = Groq(api_key=GROQ_API_KEY)
+        system_instruction = (
+            "You are an expert multi-lingual translation bridge.\n"
+            "Detect the source language name and translate text (if English to Malayalam, else to English).\n"
+            "Output MUST strictly contain these 3 lines with exact prefixes:\n"
+            "SRC: [Source Language Name]\n"
+            "TRG: [Target Language Name]\n"
+            "TRANS: [Translated Text]"
+        )
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": f"Message: \"{text}\""}
+            ],
+            temperature=0.2,
+        )
+        raw = completion.choices[0].message.content.strip()
+        parsed = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
 
-    # Method 2: LibreTranslate Backup API
-    if not translated or "500" in translated or "Error" in translated:
-        try:
-            target_code = 'ml' if is_eng else 'en'
-            response = requests.post(
-                "https://libretranslate.de/translate",
-                json={"q": text, "source": "auto", "target": target_code, "format": "text"},
-                timeout=5
-            )
-            if response.status_code == 200:
-                translated = response.json().get("translatedText")
-        except Exception:
-            pass
+        if parsed.get("trans") and parsed.get("src"):
+            return {
+                "src": parsed["src"],
+                "trg": parsed.get("trg", "Malayalam" if all(ord(c) < 128 for c in text) else "English"),
+                "trans": parsed["trans"],
+                "meaning": parsed["trans"],
+                "native_p": text,
+                "latin_p": smart_latin_fallback(text),
+                "cultural_insight": f"An expression commonly used in {parsed['src']}.",
+                "native_text": text
+            }
+    except Exception as e:
+        return {"error": f"AI Error: {str(e)[:40]}"}
 
-    if not translated or "500" in translated or "Error" in translated:
-        return {"error": "Translation service temporarily busy. Please try again."}
-
-    src_lang_name = "English" if is_eng else "Foreign Language"
-    if not is_eng:
-        if any(0x0D00 <= ord(c) <= 0x0D7F for c in text): src_lang_name = "Malayalam"
-        elif any(0x0400 <= ord(c) <= 0x04FF for c in text): src_lang_name = "Russian"
-        elif any(0x0600 <= ord(c) <= 0x06FF for c in text): src_lang_name = "Persian"
-        else: src_lang_name = "Foreign Language"
-
-    return {
-        "src": src_lang_name,
-        "trg": "Malayalam" if is_eng else "English",
-        "trans": translated,
-        "meaning": translated,
-        "native_p": text,
-        "latin_p": smart_latin_fallback(text),
-        "cultural_insight": f"An expression commonly used in {src_lang_name}.",
-        "native_text": text
-    }
+    return {"error": "Translation service temporarily busy. Please try again."}
 
 async def execute_translation(text):
     return await asyncio.to_thread(_sync_translation_logic, text)
