@@ -101,18 +101,20 @@ def _sync_translation_logic(text):
         try:
             client = Groq(api_key=GROQ_API_KEY)
             system_instruction = (
-                "You are an expert universal multi-lingual translation bridge and language tutor.\n"
+                "You are an expert multi-lingual translation bridge and cultural language tutor.\n"
                 "Rules:\n"
                 "1. Accurately detect source language (supports Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, German, English, Malayalam, etc.).\n"
-                "2. If input is English/German, translate to Malayalam. If input is in any other language, translate to English.\n"
-                "3. Provide strict English Latin romanized phonetic spelling in LATIN_P (e.g., 'sukamano' for സുഖമാണോ, 'ab-e gusht' for آب گوشت).\n"
-                "4. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+                "2. Translate text accurately.\n"
+                "3. Provide strict English Latin romanized phonetic spelling in LATIN_P so anyone can read it easily (e.g., 'sukamano' for സുഖമാണോ, 'ab-e gusht' for آب گوشت).\n"
+                "4. Provide an interesting cultural fun fact, linguistic note, or idiom related to this word in FUN_FACT.\n"
+                "5. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
                 "SRC: [Source Language Name]\n"
                 "TRG: [Target Language Name]\n"
                 "TRANS: [Translated Text in Target Language]\n"
                 "MEANING: [English meaning of the text]\n"
                 "NATIVE_P: [Original native text/script]\n"
-                "LATIN_P: [English Latin phonetic alphabet representation]"
+                "LATIN_P: [English Latin phonetic spelling to read easily]\n"
+                "FUN_FACT: [An interesting fact or idiom about this word]"
             )
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -132,6 +134,7 @@ def _sync_translation_logic(text):
                 elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
                 elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
                 elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+                elif line.startswith("FUN_FACT:"): parsed["fun_fact"] = line.replace("FUN_FACT:", "").strip()
 
             if parsed.get("trans"):
                 parsed["native_text"] = text
@@ -145,12 +148,13 @@ def _sync_translation_logic(text):
         translated = GoogleTranslator(source='auto', target=target).translate(text)
         if translated:
             return {
-                "src": "AUTO",
-                "trg": "Malayalam" if target == "ml" else "English",
+                "src": "Persian" if any(ord(c) > 1500 for c in text) else "AUTO",
+                "trg": "English",
                 "trans": translated,
                 "meaning": translated,
                 "native_p": text,
                 "latin_p": text,
+                "fun_fact": "Every language carries a unique window into its culture!",
                 "native_text": text
             }
     except Exception as e:
@@ -354,12 +358,12 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
-    src_lang = res.get("src", "AUTO")
+    src_lang = res.get("src", "Persian" if any(ord(c) > 1500 for c in text) else "AUTO")
     trg_lang = res.get("trg", "English")
     translation = res.get("trans", text)
     native_p = res.get("native_p", text)
     latin_p = res.get("latin_p", "")
-    native_text = res.get("native_text", text)
+    fun_fact = res.get("fun_fact", "Languages connect the world!")
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
@@ -368,15 +372,10 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     src_info = get_voice_info(src_lang)
     trg_info = get_voice_info(trg_lang)
 
-    # Order requested and highlighted meaning:
-    # 1. Native Phonetic (with language flag)
-    # 2. English Phonetics (Latin alphabet)
-    # 3. Meaning (EN) - Highlighted (Bold)
-    # 4. Meaning (Native) - Highlighted (Bold)
     native_p_block = f"🗣 <i>Phonetic ({src_info['flag']} {src_lang}):</i> <code>{native_p}</code>\n" if native_p else ""
-    latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
+    latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p}</b></tg-spoiler>\n" if latin_p else ""
     meaning_en_block = f"📖 <b>Meaning (EN): {translation}</b>\n" if translation else ""
-    meaning_native_block = f"📖 <b>Meaning ({src_lang}): {native_text}</b>\n" if native_text else ""
+    fun_fact_block = f"💡 <i>Fun Fact:</i> <b>{fun_fact}</b>\n" if fun_fact else ""
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
@@ -387,13 +386,13 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         f"{native_p_block}"
         f"{latin_p_block}"
         f"{meaning_en_block}"
-        f"{meaning_native_block}\n"
+        f"{fun_fact_block}\n"
         f"────────────────────────\n"
         f"🔋 Quota: {status_val}"
     )
 
     msg_id = placeholder.message_id
-    context.bot_data[f"aud_src_{msg_id}"] = {"text": native_text, "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("gtts", "en"), "lang": src_lang, "flag": src_info["flag"]}
+    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("gtts", "en"), "lang": src_lang, "flag": src_info["flag"]}
     context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("gtts", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
 
     keyboard = [
