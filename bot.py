@@ -31,10 +31,7 @@ from telegram.ext import (
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 
-# Owner ID
 OWNER_USER_ID = 1689374364
-
-# Unlimited Groups List
 UNLIMITED_GROUPS = set()
 
 async def handle_ping(request):
@@ -88,6 +85,7 @@ VOICE_MAP = {
     "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
     "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
     "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
+    "georgian": {"edge": "ka-GE-EkaNeural", "gtts": "ka", "flag": "🇬🇪", "loc": "Tbilisi"},
 }
 
 def get_voice_info(lang_name):
@@ -97,56 +95,48 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def smart_latin_fallback(text):
-    if not text: return "text"
-    if all(ord(c) < 128 for c in text): return text
-    
-    lower_txt = text.strip()
-    if "Спокойной ночи" in lower_txt: return "Spokoynoy nochi"
-    if "آب گوشت" in lower_txt: return "Ab goosht"
-    if "സുഖമാണോ" in lower_txt: return "sukamano"
-    if "ഹലോ" in lower_txt: return "hallo"
-
-    cyrillic_map = {
-        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
-        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
-        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
-        'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-        'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo', 'Ж': 'Zh',
-        'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
-        'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'H', 'Ц': 'Ts',
-        'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch', 'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
-    }
-
-    transliterated = "".join([cyrillic_map.get(c, c if ord(c) < 128 else '') for c in text])
-    transliterated = re.sub(r'\s+', ' ', transliterated).strip()
-    
-    if len(transliterated) > 1:
-        return transliterated
-
-    return "ab goosht" if "آب گوشت" in text else "phonetic text"
-
 def _sync_translation_logic(text):
     try:
         is_eng = all(ord(c) < 128 for c in text)
         target = 'ml' if is_eng else 'en'
         
+        # 1. Main Translation
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(text)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         
         with urllib.request.urlopen(req, timeout=5) as response:
-            result = json.loads(response.read().decode('utf-8'))
-            translated = "".join([item[0] for item in result[0] if item[0]])
-            
+            res_data = json.loads(response.read().decode('utf-8'))
+            translated = "".join([item[0] for item in res_data[0] if item[0]])
+            detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
+
+        # 2. Phonetic / Transliteration extraction from Google API
+        phonetic_text = text
+        try:
+            url_phonetic = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text)}"
+            req_p = urllib.request.Request(url_phonetic, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req_p, timeout=5) as resp_p:
+                p_data = json.loads(resp_p.read().decode('utf-8'))
+                if len(p_data) > 0 and len(p_data[0]) > 0:
+                    for item in p_data[0]:
+                        if len(item) > 3 and item[3]:
+                            phonetic_text = item[3]
+                            break
+        except Exception:
+            pass
+
         if not translated:
             return {"error": "Translation failed. Please try again."}
 
-        src_lang_name = "English" if is_eng else "Foreign Language"
-        if not is_eng:
-            if any(0x0D00 <= ord(c) <= 0x0D7F for c in text): src_lang_name = "Malayalam"
-            elif any(0x0400 <= ord(c) <= 0x04FF for c in text): src_lang_name = "Russian"
-            elif any(0x0600 <= ord(c) <= 0x06FF for c in text): src_lang_name = "Persian"
-            else: src_lang_name = "Foreign Language"
+        lang_names = {
+            'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
+            'vi': 'Vietnamese', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
+            'fr': 'French', 'es': 'Spanish', 'ru': 'Russian', 'en': 'English',
+            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish', 'ka': 'Georgian'
+        }
+        
+        src_lang_name = lang_names.get(detected_code, detected_code.capitalize() if detected_code != "unknown" else "Foreign Language")
+        if is_eng:
+            src_lang_name = "English"
 
         return {
             "src": src_lang_name,
@@ -154,7 +144,7 @@ def _sync_translation_logic(text):
             "trans": translated,
             "meaning": translated,
             "native_p": text,
-            "latin_p": smart_latin_fallback(text),
+            "latin_p": phonetic_text if phonetic_text != text else text,
             "cultural_insight": f"An expression commonly used in {src_lang_name}.",
             "native_text": text
         }
@@ -537,8 +527,8 @@ async def main():
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
 
-    stop_exp = asyncio.Event()
-    await stop_exp.wait()
+    stop_event = asyncio.Event()
+    await stop_event.wait()
 
 if __name__ == "__main__":
     try: asyncio.run(main())
