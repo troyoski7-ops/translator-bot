@@ -68,17 +68,19 @@ ANIM_STORE_URL = "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
 VOICE_MAP = {
+    "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
+    "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
+    "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
+    "uzbek": {"edge": "uz-UZ-MadinaNeural", "gtts": "uz", "flag": "🇺🇿", "loc": "Tashkent"},
+    "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "loc": "Astana"},
+    "tajik": {"edge": "tg-TJ-GanjinaNeural", "gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
     "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
     "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
     "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
     "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
-    "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
-    "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
     "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
     "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
     "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "loc": "London"},
-    "tajik": {"edge": "tg-TJ-GanjinaNeural", "gtts": "tg", "flag": "🇹🇯", "loc": "Dushanbe"},
-    "azerbaijani": {"edge": "az-AZ-BabekNeural", "gtts": "az", "flag": "🇦🇿", "loc": "Baku"},
     "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
     "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
     "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
@@ -99,17 +101,18 @@ def _sync_translation_logic(text):
         try:
             client = Groq(api_key=GROQ_API_KEY)
             system_instruction = (
-                "You are a professional multi-lingual translator, tutor, and pronunciation guide.\n"
+                "You are a professional multi-lingual translator and tutor.\n"
                 "Rules:\n"
                 "1. Accurately detect source language.\n"
                 "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
-                "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+                "3. If input is in Malayalam or any non-Latin script, provide its English phonetic romanization (Manglish/Latin script) in LATIN_P.\n"
+                "4. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
                 "SRC: [Source Language Name]\n"
                 "TRG: [Target Language Name]\n"
                 "TRANS: [Translated Text]\n"
                 "MEANING: [English meaning]\n"
                 "NATIVE_P: [Phonetic in native script]\n"
-                "LATIN_P: [Phonetic in English Latin alphabet]"
+                "LATIN_P: [Phonetic in English Latin alphabet (e.g. sugamano for സുഖമാണോ)]"
             )
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -218,7 +221,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "👤 <b>1. Personal Chat (Solo Tutor & Translator):</b>\n"
         "• Send any text in any language.\n"
-        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons to listen to both Source & Target languages in natural human voices (Edge-TTS & gTTS)!\n\n"
+        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons with language flags!\n\n"
         "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
         "• Add this bot to any group chat for instant multi-lingual shifting.\n\n"
         "<b>Commands:</b>\n"
@@ -345,13 +348,13 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     msg_id = placeholder.message_id
-    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "voice_edge": src_info.get("edge"), "gtts_code": "en", "lang": src_lang}
-    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": "ml" if "malayalam" in trg_lang.lower() else "en", "lang": trg_lang}
+    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("gtts", "en"), "lang": src_lang, "flag": src_info["flag"]}
+    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("gtts", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
 
     keyboard = [
         [
-            InlineKeyboardButton(f"🔊 Listen (Source)", callback_data=f"play_src_{msg_id}"),
-            InlineKeyboardButton(f"🔊 Listen (Target)", callback_data=f"play_trg_{msg_id}")
+            InlineKeyboardButton(f"🔊 {src_info['flag']} Listen ({src_lang})", callback_data=f"play_src_{msg_id}"),
+            InlineKeyboardButton(f"🔊 {trg_info['flag']} Listen ({trg_lang})", callback_data=f"play_trg_{msg_id}")
         ]
     ]
 
@@ -359,7 +362,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("🎧 Generating Audio...")
     data = query.data
 
     if "src_" in data:
@@ -373,10 +375,14 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("Session expired!", show_alert=True)
         return
 
+    await query.answer(f"🎧 Generating {cache['flag']} Audio...")
+
     text_to_speak = cache["text"]
     voice_edge = cache.get("voice_edge")
     gtts_code = cache.get("gtts_code", "en")
+    lang_flag = cache.get("flag", "🌐")
     temp_audio_file = f"speech_{msg_id}.mp3"
+    caption = f"🔊 <b>Audio ({lang_flag}):</b>\n<i>\"{text_to_speak}\"</i>"
 
     try:
         worked = False
@@ -396,9 +402,9 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.to_thread(_generate_gtts)
 
         with open(temp_audio_file, "rb") as audio:
-            await context.bot.send_voice(chat_id=query.message.chat_id, voice=audio)
+            await context.bot.send_voice(chat_id=query.message.chat_id, voice=audio, caption=caption, parse_mode="HTML")
     except Exception as e:
-        await context.bot.send_message(chat_id=query.message.chat_id, text=f"⚠️ Audio error")
+        await context.bot.send_message(chat_id=query.message.chat_id, text=f"⚠️ Audio error: {str(e)[:40]}")
     finally:
         if os.path.exists(temp_audio_file):
             try: os.remove(temp_audio_file)
@@ -461,6 +467,7 @@ async def main():
 
     app.add_handler(CallbackQueryHandler(plan_selection_callback, pattern="^buy_"))
     app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^play_"))
+    app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^slow_"))
     app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
