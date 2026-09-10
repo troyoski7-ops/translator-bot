@@ -7,6 +7,12 @@ import subprocess
 import sys
 import requests
 
+try:
+    from groq import Groq
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "groq"])
+    from groq import Groq
+
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
@@ -29,6 +35,7 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+GROQ_API_KEY = "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"
 
 # നിങ്ങളുടെ ടെലഗ്രാം യൂസർ ഐഡി (Owner ID)
 OWNER_USER_ID = 1689374364
@@ -123,24 +130,63 @@ def smart_latin_fallback(text):
     if len(transliterated) > 1:
         return transliterated
 
-    # Fallback to English phonetic approximation if string has non-latin chars
     return "phonetic text"
 
 def _sync_translation_logic(text):
+    # Method 1: Groq AI (Llama-3) - Ultra Fast & Never Busy
+    if GROQ_API_KEY:
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            system_instruction = (
+                "You are an expert multi-lingual translation bridge.\n"
+                "Detect the source language name and translate text (if English to Malayalam, else to English).\n"
+                "Output MUST strictly contain these 3 lines with exact prefixes:\n"
+                "SRC: [Source Language Name]\n"
+                "TRG: [Target Language Name]\n"
+                "TRANS: [Translated Text]"
+            )
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": f"Message: \"{text}\""}
+                ],
+                temperature=0.2,
+            )
+            raw = completion.choices[0].message.content.strip()
+            parsed = {}
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+
+            if parsed.get("trans") and parsed.get("src"):
+                return {
+                    "src": parsed["src"],
+                    "trg": parsed.get("trg", "Malayalam" if all(ord(c) < 128 for c in text) else "English"),
+                    "trans": parsed["trans"],
+                    "meaning": parsed["trans"],
+                    "native_p": text,
+                    "latin_p": smart_latin_fallback(text),
+                    "cultural_insight": f"An expression commonly used in {parsed['src']}.",
+                    "native_text": text
+                }
+        except Exception:
+            pass
+
+    # Method 2 & 3 & 4: Backup Translators (Google, MyMemory, LibreTranslate)
     try:
         is_eng = all(ord(c) < 128 for c in text)
         target_code = 'ml' if is_eng else 'en'
         target_lang_name = "Malayalam" if is_eng else "English"
         
         translated = None
-        
-        # Method 1: Google Translator
         try:
             translated = GoogleTranslator(source='auto', target=target_code).translate(text)
         except Exception:
             pass
 
-        # Method 2: MyMemory Translator
         if not translated or "500" in translated or "Error" in translated:
             try:
                 src_code = 'en' if not is_eng else 'ml'
@@ -148,7 +194,6 @@ def _sync_translation_logic(text):
             except Exception:
                 pass
 
-        # Method 3: LibreTranslate Free API (Ultimate Backup)
         if not translated or "500" in translated or "Error" in translated:
             try:
                 response = requests.post(
