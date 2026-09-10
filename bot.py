@@ -2,11 +2,11 @@ import os
 import io
 import time
 import asyncio
+import requests
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
-from googletrans import Translator
 from telegram import (
     Update,
     LabeledPrice,
@@ -24,7 +24,6 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-translator = Translator()
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -84,27 +83,30 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-async def execute_translation(text, recent_languages=None, is_group=False):
+def _sync_translate(text):
     try:
-        # ഇംഗ്ലീഷ് ആണെങ്കിൽ മലയാളത്തിലേക്ക്, അല്ലെങ്കിൽ ഇംഗ്ലീഷിലേക്ക് മാറ്റുക
-        target_lang = "ml" if is_text_english(text) else "en"
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, translator.translate, text, target_lang)
-        
-        src_lang_name = result.src.upper()
-        trg_lang_name = "Malayalam" if target_lang == "ml" else "English"
-        translated_text = result.text
-
-        return {
-            "src": src_lang_name,
-            "trg": trg_lang_name,
-            "trans": translated_text,
-            "meaning": translated_text,
-            "native_p": "",
-            "latin_p": ""
-        }
+        target = "ml" if is_text_english(text) else "en"
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={requests.utils.quote(text)}"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            translated = "".join([item[0] for item in data[0] if item[0]])
+            src_lang = data[2] if len(data) > 2 else "auto"
+            return {
+                "src": src_lang.upper(),
+                "trg": "Malayalam" if target == "ml" else "English",
+                "trans": translated,
+                "meaning": translated,
+                "native_p": "",
+                "latin_p": ""
+            }
+        return {"error": "Translation service busy."}
     except Exception as e:
-        return {"error": f"Translation Error: {str(e)[:50]}"}
+        return {"error": f"Error: {str(e)[:40]}"}
+
+async def execute_translation(text, recent_languages=None, is_group=False):
+    return await asyncio.to_thread(_sync_translate, text)
 
 def is_text_english(text):
     try:
@@ -145,8 +147,8 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
         "• High-Definition Dual Audio Pronunciations (Source & Target)\n"
         "• Secret VIP Luxury Themes & Custom Backgrounds\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
-        "• <b>3 Months ELITE:</b> 120 Stars <i>(20% Off)</i>\n"
-        "• <b>1 Year LEGEND:</b> 399 Stars <i>(Best Value!)</i>"
+        "• <b>3 Months ELITE:</b> 120 Stars\n"
+        "• <b>1 Year LEGEND:</b> 399 Stars"
     )
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🔥 1 Month (50 Stars)", callback_data="buy_sub_1m")],
@@ -176,8 +178,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "👤 <b>1. Personal Chat (Solo Tutor & Translator):</b>\n"
         "• Send any text in any language.\n"
-        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons to listen to both Source & Target languages in natural human voices!\n\n"
-        "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
+        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons to listen to both Source & Target languages!\n\n"
+        "👥 <b>2. Group Chat (Automatic Live Bridge):</b>\n"
         "• Add this bot to any group chat for instant multi-lingual shifting.\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Holographic UI Theme\n"
@@ -224,7 +226,7 @@ async def custom_bg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     _, _, is_vip = is_user_active(context, user_id)
     
     if not is_vip:
-        await update.message.reply_text("🔒 <b>VIP Exclusive Feature!</b>\n\nCustom background GIFs are unlocked only for VIP/Legend subscribers. Use /premium to upgrade!", parse_mode="HTML")
+        await update.message.reply_text("🔒 <b>VIP Exclusive Feature!</b>\n\nCustom background GIFs are unlocked only for VIP/Legend subscribers.", parse_mode="HTML")
         return
 
     args = context.args
@@ -250,18 +252,17 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"📊 <b>CORE STATUS</b>\n\n"
         f"🔋 Neural Quota: {status_val}\n"
-        f"⚡ Bridge State: {state}\n\n"
-        f"<i>Unlock unlimited bandwidth & custom themes via /premium</i>",
+        f"⚡ Bridge State: {state}",
         parse_mode="HTML"
     )
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = True
-    await update.message.reply_text("⏸ <b>Neural Bridge Paused!</b> Send /resume to reactivate.", parse_mode="HTML")
+    await update.message.reply_text("⏸ <b>Bridge Paused!</b> Send /resume to reactivate.", parse_mode="HTML")
 
 async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
-    await update.message.reply_text("▶️ <b>Neural Bridge Resumed!</b> Synchronizing ⚡", parse_mode="HTML")
+    await update.message.reply_text("▶️ <b>Bridge Resumed!</b>", parse_mode="HTML")
 
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
@@ -315,34 +316,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         quote_symbol = "💬 "
         status_line = f"🔋 Quota: {status_val}"
 
-    mode_label = "🌐 Group Live Neural Bridge" if is_group else "💠 Personal Neural Tutor"
+    mode_label = "🌐 Group Live Bridge" if is_group else "💠 Personal Tutor"
 
     card_text = (
         f"{vip_header}"
         f"👤 <b>{user_name}</b> ➔ <i>{mode_label}</i>\n"
         f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code>  <b>⚡ SHIFT SYNC ⚡</b>  {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code>  <b>⚡ SHIFT ⚡</b>  {trg_info['flag']} <code>{trg_info['loc']} ({trg_lang.upper()})</code>\n"
         f"────────────────────────\n\n"
         f"<blockquote>{quote_symbol}<b>{translation}</b></blockquote>\n\n"
-        f"📖 <i>Meaning:</i> {meaning_en}\n\n"
         f"────────────────────────\n"
         f"⚡ {status_line}"
     )
 
     msg_id = placeholder.message_id
-    
-    context.bot_data[f"aud_src_{msg_id}"] = {
-        "text": text,
-        "voice_edge": src_info.get("edge"),
-        "gtts_code": src_info["gtts"],
-        "lang": src_lang
-    }
-    context.bot_data[f"aud_trg_{msg_id}"] = {
-        "text": translation,
-        "voice_edge": trg_info.get("edge"),
-        "gtts_code": trg_info["gtts"],
-        "lang": trg_lang
-    }
+    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "voice_edge": src_info.get("edge"), "gtts_code": src_info["gtts"], "lang": src_lang}
+    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": trg_info["gtts"], "lang": trg_lang}
 
     keyboard = [
         [
