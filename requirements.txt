@@ -1,6 +1,6 @@
-groq
 python-telegram-bot
 gtts
 edge-tts
 aiohttp
 deep-translator
+requests
