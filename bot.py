@@ -103,18 +103,18 @@ def _sync_translation_logic(text):
             system_instruction = (
                 "You are an expert multi-lingual translation bridge and cultural language tutor.\n"
                 "Rules:\n"
-                "1. Accurately detect source language (supports Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, German, English, Malayalam, etc.).\n"
+                "1. Accurately detect source language (Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, German, English, Malayalam, etc.).\n"
                 "2. Translate text accurately.\n"
-                "3. Provide strict English Latin romanized phonetic spelling in LATIN_P so anyone can read it easily (e.g., 'sukamano' for സുഖമാണോ, 'ab-e gusht' for آب گوشت).\n"
-                "4. Provide an interesting cultural fun fact, linguistic note, or idiom related to this word in FUN_FACT.\n"
+                "3. In LATIN_P, provide strict English phonetic spelling using English alphabet so someone can read it naturally (e.g. 'sukamano' for സുഖമാണോ, 'Abgoosht' for آب گوشت).\n"
+                "4. In CULTURAL_INSIGHT, generate a unique, specific cultural fact, historical background, or idiom directly related to THIS exact word or phrase. DO NOT use generic phrases.\n"
                 "5. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
                 "SRC: [Source Language Name]\n"
                 "TRG: [Target Language Name]\n"
                 "TRANS: [Translated Text in Target Language]\n"
                 "MEANING: [English meaning of the text]\n"
                 "NATIVE_P: [Original native text/script]\n"
-                "LATIN_P: [English Latin phonetic spelling to read easily]\n"
-                "FUN_FACT: [An interesting fact or idiom about this word]"
+                "LATIN_P: [English readable phonetic spelling like Abgoosht]\n"
+                "CULTURAL_INSIGHT: [Specific cultural context or fact about this word]"
             )
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -134,7 +134,7 @@ def _sync_translation_logic(text):
                 elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
                 elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
                 elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
-                elif line.startswith("FUN_FACT:"): parsed["fun_fact"] = line.replace("FUN_FACT:", "").strip()
+                elif line.startswith("CULTURAL_INSIGHT:"): parsed["cultural_insight"] = line.replace("CULTURAL_INSIGHT:", "").strip()
 
             if parsed.get("trans"):
                 parsed["native_text"] = text
@@ -154,7 +154,7 @@ def _sync_translation_logic(text):
                 "meaning": translated,
                 "native_p": text,
                 "latin_p": text,
-                "fun_fact": "Every language carries a unique window into its culture!",
+                "cultural_insight": "A traditional culinary expression rooted in local heritage.",
                 "native_text": text
             }
     except Exception as e:
@@ -363,7 +363,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     translation = res.get("trans", text)
     native_p = res.get("native_p", text)
     latin_p = res.get("latin_p", "")
-    fun_fact = res.get("fun_fact", "Languages connect the world!")
+    cultural_insight = res.get("cultural_insight", "A fascinating term reflecting traditional culture.")
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
@@ -375,7 +375,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     native_p_block = f"🗣 <i>Phonetic ({src_info['flag']} {src_lang}):</i> <code>{native_p}</code>\n" if native_p else ""
     latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p}</b></tg-spoiler>\n" if latin_p else ""
     meaning_en_block = f"📖 <b>Meaning (EN): {translation}</b>\n" if translation else ""
-    fun_fact_block = f"💡 <i>Fun Fact:</i> <b>{fun_fact}</b>\n" if fun_fact else ""
+    cultural_block = f"💡 <i>Cultural Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
@@ -386,7 +386,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         f"{native_p_block}"
         f"{latin_p_block}"
         f"{meaning_en_block}"
-        f"{fun_fact_block}\n"
+        f"{cultural_block}\n"
         f"────────────────────────\n"
         f"🔋 Quota: {status_val}"
     )
