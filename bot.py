@@ -1,8 +1,18 @@
 import os
+import re
 import io
 import time
 import asyncio
+import subprocess
+import sys
 import requests
+
+try:
+    from groq import Groq
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "groq"])
+    from groq import Groq
+
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
@@ -24,6 +34,7 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+GROQ_API_KEY = "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"
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -83,9 +94,52 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def _sync_translate(text):
+def _sync_groq_call(text, recent_languages=None, is_group=False):
+    # Primary Method: Groq AI
+    if GROQ_API_KEY:
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            system_instruction = (
+                "You are a professional multi-lingual translator, tutor, and pronunciation guide.\n"
+                "Rules:\n"
+                "1. Accurately detect source language.\n"
+                "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
+                "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+                "SRC: [Source Language Name]\n"
+                "TRG: [Target Language Name]\n"
+                "TRANS: [Translated Text]\n"
+                "MEANING: [English meaning]\n"
+                "NATIVE_P: [Phonetic in native script]\n"
+                "LATIN_P: [Phonetic in English Latin alphabet]"
+            )
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": f"Message: \"{text}\""}
+                ],
+                temperature=0.3,
+            )
+            raw = completion.choices[0].message.content.strip()
+            parsed = {}
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
+                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
+
+            if parsed.get("trans"):
+                return parsed
+        except Exception:
+            pass  # Groq fail ആയാൽ ഓട്ടോമാറ്റിക്കായി താഴെയുള്ള ബാക്ക്-അപ്പിലേക്ക് മാറും
+
+    # Fallback Method: Direct Public API (Never Fails)
     try:
-        target = "ml" if is_text_english(text) else "en"
+        is_eng = all(ord(c) < 128 for c in text)
+        target = "ml" if is_eng else "en"
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={requests.utils.quote(text)}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=5)
@@ -101,20 +155,13 @@ def _sync_translate(text):
                 "native_p": translated,
                 "latin_p": text
             }
-        return {"error": "Translation service busy."}
     except Exception as e:
         return {"error": f"Error: {str(e)[:40]}"}
 
-async def execute_translation(text, recent_languages=None, is_group=False):
-    return await asyncio.to_thread(_sync_translate, text)
+    return {"error": "Translation service busy."}
 
-def is_text_english(text):
-    try:
-        text.encode(encoding='utf-8').decode('ascii')
-    except UnicodeDecodeError:
-        return False
-    else:
-        return True
+async def execute_translation(text, recent_languages=None, is_group=False):
+    return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
 
 FREE_LIMIT = 100
 PLANS = {
@@ -143,7 +190,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
         "Free translation quota exhausted!\n\n"
-        "• Unlimited Text Translations\n"
+        "• Unlimited Text Translations & Phonetics\n"
         "• High-Definition Dual Audio Pronunciations\n"
         "• Secret VIP Luxury Themes\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
@@ -169,7 +216,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome = (
         f"🌌 <b>QUANTUM POLYGLOT NEURAL BRIDGE</b> 🌌\n\n"
-        "✨ Send any text to translate instantly!\n"
+        "✨ Send any text to translate instantly with phonetics & meaning!\n"
         "🔊 Dual Audio buttons included for pronunciation.\n\n"
         "Send any text to begin!"
     )
@@ -257,30 +304,40 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
-    src_lang = res.get("src", "AUTO")
-    trg_lang = res.get("trg", "English")
+    src_lang = res.get("src", "Auto")
+    trg_lang = res.get("trg", "Malayalam")
     translation = res.get("trans", text)
+    meaning_en = res.get("meaning", text)
+    native_p = res.get("native_p", "")
+    latin_p = res.get("latin_p", "")
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
         _, status_val, _ = is_user_active(context, user_id)
 
     src_info = get_voice_info(src_lang)
-    trg_info = get_voice_info(trg_lang)
+    trg_info = get_voice_info("malayalam" if "malayalam" in trg_lang.lower() else "english")
+
+    native_block = f"🗣 <i>Phonetic:</i> <code>{native_p}</code>\n" if native_p else ""
+    latin_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
+    meaning_block = f"📖 <i>Meaning:</i> <b>{meaning_en}</b>\n" if meaning_en else ""
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
         f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"────────────────────────\n\n"
         f"💬 <b>{translation}</b>\n\n"
+        f"{native_block}"
+        f"{latin_block}"
+        f"{meaning_block}\n"
         f"────────────────────────\n"
-        f"🔋 Quota: {status_val}"
+        f"⚡ Quota: {status_val}"
     )
 
     msg_id = placeholder.message_id
     context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "voice_edge": src_info.get("edge"), "gtts_code": "en", "lang": src_lang}
-    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": "ml" if trg_lang == "Malayalam" else "en", "lang": trg_lang}
+    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": "ml" if "malayalam" in trg_lang.lower() else "en", "lang": trg_lang}
 
     keyboard = [
         [
