@@ -502,7 +502,7 @@ async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_
 
     await context.bot.send_invoice(
         chat_id=query.message.chat_id,
--        title=f"⭐️ {plan['name']}",
+        title=f"⭐️ {plan['name']}",
         description=f"Unlock VIP features for {plan['days']} days.",
         payload=plan_key,
         provider_token="",
