@@ -5,7 +5,6 @@ import time
 import asyncio
 import subprocess
 import sys
-import requests
 
 try:
     from groq import Groq
@@ -17,6 +16,7 @@ from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
+from deep_translator import GoogleTranslator
 from telegram import (
     Update,
     LabeledPrice,
@@ -94,8 +94,7 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-def _sync_groq_call(text, recent_languages=None, is_group=False):
-    # Primary Method: Groq AI
+def _sync_translation_logic(text):
     if GROQ_API_KEY:
         try:
             client = Groq(api_key=GROQ_API_KEY)
@@ -134,21 +133,15 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
             if parsed.get("trans"):
                 return parsed
         except Exception:
-            pass  # Groq fail ആയാൽ ഓട്ടോമാറ്റിക്കായി താഴെയുള്ള ബാക്ക്-അപ്പിലേക്ക് മാറും
+            pass
 
-    # Fallback Method: Direct Public API (Never Fails)
     try:
         is_eng = all(ord(c) < 128 for c in text)
         target = "ml" if is_eng else "en"
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={requests.utils.quote(text)}"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            translated = "".join([item[0] for item in data[0] if item[0]])
-            src_lang = data[2] if len(data) > 2 else "auto"
+        translated = GoogleTranslator(source='auto', target=target).translate(text)
+        if translated:
             return {
-                "src": src_lang.upper(),
+                "src": "AUTO",
                 "trg": "Malayalam" if target == "ml" else "English",
                 "trans": translated,
                 "meaning": translated,
@@ -161,7 +154,7 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
     return {"error": "Translation service busy."}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
-    return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
+    return await asyncio.to_thread(_sync_translation_logic, text)
 
 FREE_LIMIT = 100
 PLANS = {
@@ -211,13 +204,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
     user_id = str(update.effective_user.id)
     _, _, is_vip = is_user_active(context, user_id)
-    active_theme = STANDARD_THEMES["chibi"]
-    bg_url = active_theme["url"]
+
+    custom_bg = context.chat_data.get("user_custom_bg", {}).get(user_id)
+    selected_theme = context.chat_data.get("user_theme", {}).get(user_id, "chibi")
+    active_theme = ALL_THEMES.get(selected_theme, STANDARD_THEMES["chibi"])
     
+    bg_url = custom_bg if (custom_bg and is_vip) else active_theme["url"]
+    vip_badge = "🌟 <b>VIP HOLOGRAPHIC SHIELD ACTIVE</b>\n" if is_vip else ""
+
     welcome = (
-        f"🌌 <b>QUANTUM POLYGLOT NEURAL BRIDGE</b> 🌌\n\n"
-        "✨ Send any text to translate instantly with phonetics & meaning!\n"
-        "🔊 Dual Audio buttons included for pronunciation.\n\n"
+        f"🌌 <b>QUANTUM POLYGLOT NEURAL BRIDGE</b> 🌌\n"
+        f"{vip_badge}\n"
+        "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
+        "👤 <b>1. Personal Chat (Solo Tutor & Translator):</b>\n"
+        "• Send any text in any language.\n"
+        "• 🔊 <b>HD Voice & Audio Synthesis:</b> Get instant dual audio buttons to listen to both Source & Target languages in natural human voices (Edge-TTS & gTTS)!\n\n"
+        "👥 <b>2. Group Chat (Automatic Live Neural Bridge):</b>\n"
+        "• Add this bot to any group chat for instant multi-lingual shifting.\n\n"
+        "<b>Commands:</b>\n"
+        "🎨 /theme • Holographic UI Theme\n"
+        "🖼 /custombg [URL] • Set Custom VIP Background GIF\n"
+        "📊 /status • Quota & Core Status\n"
+        "⏸ /stop • Pause | ▶️ /resume • Resume\n"
+        "⭐️ /premium • VIP Vault\n\n"
         "Send any text to begin!"
     )
     try:
@@ -304,8 +313,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
-    src_lang = res.get("src", "Auto")
-    trg_lang = res.get("trg", "Malayalam")
+    src_lang = res.get("src", "AUTO")
+    trg_lang = res.get("trg", "English")
     translation = res.get("trans", text)
     meaning_en = res.get("meaning", text)
     native_p = res.get("native_p", "")
@@ -325,14 +334,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card_text = (
         f"👤 <b>{user_name}</b>\n"
         f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
+        f"{src_info['flag']} <code>{src_lang}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"────────────────────────\n\n"
         f"💬 <b>{translation}</b>\n\n"
         f"{native_block}"
         f"{latin_block}"
         f"{meaning_block}\n"
         f"────────────────────────\n"
-        f"⚡ Quota: {status_val}"
+        f"🔋 Quota: {status_val}"
     )
 
     msg_id = placeholder.message_id
