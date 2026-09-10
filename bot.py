@@ -103,18 +103,19 @@ def _sync_translation_logic(text):
             system_instruction = (
                 "You are an expert multi-lingual translation bridge and cultural language tutor.\n"
                 "Rules:\n"
-                "1. Accurately and strictly detect the true source language of the input text (e.g., if input is Malayalam like 'സുഖമാണോ', source must be 'Malayalam'. If Persian, 'Persian', etc.).\n"
+                "1. Accurately detect true source language (Malayalam, Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, German, English, etc.).\n"
                 "2. Translate text accurately.\n"
-                "3. In LATIN_P, provide strict English phonetic romanized spelling using English alphabet so someone can read it naturally (e.g. 'sukamano' for സുഖമാണോ, 'Abgoosht' for آب گوشت).\n"
-                "4. In CULTURAL_INSIGHT, generate a unique, specific, and fresh cultural fact, historical background, or linguistic idiom directly related to THIS exact word or phrase. Avoid generic sentences.\n"
-                "5. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-                "SRC: [True Source Language Name, e.g. Malayalam or Persian]\n"
-                "TRG: [Target Language Name, e.g. English]\n"
+                "3. In NATIVE_P, put the original native text/script.\n"
+                "4. In LATIN_P, you MUST use ONLY standard English Latin alphabets (A-Z, a-z) to spell out how the source word is pronounced. NEVER output native non-English scripts in LATIN_P. (Examples: 'sukamano' for സുഖമാണോ, 'abgoosht' for آب گوشت).\n"
+                "5. In CULTURAL_INSIGHT, generate a unique, specific cultural fact or idiom directly related to this exact word.\n"
+                "6. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+                "SRC: [Source Language Name]\n"
+                "TRG: [Target Language Name]\n"
                 "TRANS: [Translated Text in Target Language]\n"
                 "MEANING: [English meaning of the text]\n"
                 "NATIVE_P: [Original native text/script]\n"
-                "LATIN_P: [English readable phonetic spelling like sukamano or Abgoosht]\n"
-                "CULTURAL_INSIGHT: [Unique and specific cultural context or fact about this exact word]"
+                "LATIN_P: [Strictly English alphabet phonetic spelling like sukamano or abgoosht]\n"
+                "CULTURAL_INSIGHT: [Unique cultural context about this word]"
             )
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
