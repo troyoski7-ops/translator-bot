@@ -36,9 +36,6 @@ from telegram.ext import (
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GROQ_API_KEY = "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"
 
-# നിങ്ങളുടെ ടെലഗ്രാം യൂസർ ഐഡി
-OWNER_USER_ID = 1689374364
-
 # Dynamic unlimited groups set via /setgroup command
 UNLIMITED_GROUPS = set()
 
@@ -105,14 +102,11 @@ def smart_latin_fallback(text, lang):
     if not text: return "text"
     if all(ord(c) < 128 for c in text): return text
     if "സുഖ" in text or "ഹലോ" in text: return "sukamano" if "സുഖ" in text else "hallo"
-    if "آب" in text or "گوشت" in text: return "abgoosht"
     clean = "".join([c for c in text if ord(c) < 128])
     return clean.strip() if len(clean) > 1 else text.lower()
 
 def _sync_translation_logic(text):
     detected_lang_name = "English"
-    target_lang = "Malayalam"
-    
     try:
         detected_code = GoogleTranslator(source='auto', target='en').detect(text)
         mapping = {
@@ -130,64 +124,9 @@ def _sync_translation_logic(text):
 
     target_lang = "Malayalam" if detected_lang_name.lower() == "english" else "English"
 
-    if GROQ_API_KEY:
-        try:
-            client = Groq(api_key=GROQ_API_KEY)
-            system_instruction = (
-                f"You are a professional multi-lingual translation bridge supporting ALL world languages.\n"
-                f"Input text language is: {detected_lang_name}.\n"
-                f"Target language for translation: {target_lang}.\n"
-                "Rules:\n"
-                f"1. SRC: {detected_lang_name}\n"
-                f"2. TRG: {target_lang}\n"
-                "3. TRANS: Accurate translation.\n"
-                "4. MEANING: Meaning.\n"
-                "5. NATIVE_P: Original script.\n"
-                "6. LATIN_P: Strictly English Latin alphabet (A-Z, a-z) pronunciation.\n"
-                "7. CULTURAL_INSIGHT: Unique cultural fact.\n"
-                "Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
-                f"SRC: {detected_lang_name}\n"
-                f"TRG: {target_lang}\n"
-                "TRANS: [Translated Text]\n"
-                "MEANING: [Meaning]\n"
-                "NATIVE_P: [Original text script]\n"
-                "LATIN_P: [English alphabet pronunciation using A-Z only]\n"
-                "CULTURAL_INSIGHT: [Cultural fact]"
-            )
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": system_instruction},
-                    {"role": "user", "content": f"Message: \"{text}\""}
-                ],
-                temperature=0.3,
-            )
-            raw = completion.choices[0].message.content.strip()
-            parsed = {}
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
-                elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
-                elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
-                elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
-                elif line.startswith("NATIVE_P:"): parsed["native_p"] = line.replace("NATIVE_P:", "").strip()
-                elif line.startswith("LATIN_P:"): parsed["latin_p"] = line.replace("LATIN_P:", "").strip()
-                elif line.startswith("CULTURAL_INSIGHT:"): parsed["cultural_insight"] = line.replace("CULTURAL_INSIGHT:", "").strip()
-
-            if parsed.get("trans"):
-                parsed["native_text"] = text
-                latin = parsed.get("latin_p", "")
-                if not latin or not all(ord(c) < 128 for c in latin):
-                    parsed["latin_p"] = smart_latin_fallback(text, parsed.get("src", ""))
-                parsed["src"] = detected_lang_name
-                parsed["trg"] = target_lang
-                return parsed
-        except Exception:
-            pass
-
     try:
         translated = GoogleTranslator(source='auto', target='ml' if detected_lang_name.lower() == 'english' else 'en').translate(text)
-        if translated:
+        if translated and "500" not in translated:
             return {
                 "src": detected_lang_name,
                 "trg": target_lang,
@@ -198,10 +137,36 @@ def _sync_translation_logic(text):
                 "cultural_insight": f"An expression commonly used in {detected_lang_name}.",
                 "native_text": text
             }
-    except Exception as e:
-        return {"error": f"Error: {str(e)[:40]}"}
+    except Exception:
+        pass
 
-    return {"error": "Translation service busy."}
+    if GROQ_API_KEY:
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are a direct translator. Translate the given text accurately. If input is English translate to Malayalam, otherwise translate to English. Reply with ONLY the translated text and nothing else."},
+                    {"role": "user", "content": text}
+                ],
+                temperature=0.3,
+            )
+            trans_result = completion.choices[0].message.content.strip()
+            if trans_result and "500" not in trans_result:
+                return {
+                    "src": detected_lang_name,
+                    "trg": target_lang,
+                    "trans": trans_result,
+                    "meaning": trans_result,
+                    "native_p": text,
+                    "latin_p": smart_latin_fallback(text, detected_lang_name),
+                    "cultural_insight": f"An expression commonly used in {detected_lang_name}.",
+                    "native_text": text
+                }
+        except Exception:
+            pass
+
+    return {"error": "Translation service busy. Please try again."}
 
 async def execute_translation(text):
     return await asyncio.to_thread(_sync_translation_logic, text)
@@ -214,7 +179,7 @@ PLANS = {
 }
 
 def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: str, chat_id: int):
-    if int(user_id) == OWNER_USER_ID or chat_id in UNLIMITED_GROUPS:
+    if chat_id in UNLIMITED_GROUPS:
         return True, "♾️ UNLIMITED", True
 
     if "premium_expiry" not in context.bot_data: context.bot_data["premium_expiry"] = {}
@@ -233,13 +198,7 @@ def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: str, chat_id: in
     return (True, f"{rem}/100", False) if rem > 0 else (False, "Expired", False)
 
 async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
     chat = update.effective_chat
-    
-    if user_id != OWNER_USER_ID:
-        await update.message.reply_text("⛔ You are not authorized to use this command.")
-        return
-
     if chat.type in ["group", "supergroup"]:
         UNLIMITED_GROUPS.add(chat.id)
         await update.message.reply_text(f"🚀 <b>Success!</b> This group is now set to <b>Two-Way Unlimited Translation Bridge</b> for everyone!", parse_mode="HTML")
@@ -284,19 +243,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (PM):</b>\n"
-        "• Send text or voice notes directly to me in any language for instant translation, phonetics, and meanings.\n\n"
+        "• Send text or voice notes directly to me in <b>any language</b> for instant translation, phonetics, and meanings.\n\n"
         "👥 <b>2. Telegram Groups:</b>\n"
         "• Add this bot to any group chat.\n"
-        "• User 1 types in their language → Bot translates it automatically.\n"
-        "• User 2 replies in their language → Bot translates it back automatically.\n"
-        "• Owner can type <code>/setgroup</code> in any group to make it 100% free and unlimited for all members!\n\n"
+        "• <b>User 1</b> types in their language → <b>Bot translates it automatically.</b>\n"
+        "• <b>User 2</b> replies in their language → <b>Bot translates it back automatically.</b>\n"
+        "• Type <code>/setgroup</code> in any group to make it 100% free and unlimited for all members!\n\n"
         "<b>Commands:</b>\n"
-        "🚀 /setgroup • Authorize current group as Unlimited (Owner only)\n"
+        "🚀 /setgroup • Authorize current group as Unlimited\n"
         "🎨 /theme • Holographic UI Theme\n"
         "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • VIP Vault\n\n"
-        "Send any text or voice note to begin!"
+        "<b>Send any text or voice note to begin!</b>"
     )
     try:
         await update.message.reply_animation(animation=ANIM_WELCOME_URL, caption=welcome, parse_mode="HTML")
@@ -432,7 +391,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     latin_p = res.get("latin_p", "")
     cultural_insight = res.get("cultural_insight", "A unique linguistic expression.")
 
-    if int(user_id) != OWNER_USER_ID and chat_id not in UNLIMITED_GROUPS and not is_vip:
+    if chat_id not in UNLIMITED_GROUPS and not is_vip:
         context.bot_data["free_credits"][user_id] -= 1
         _, status_val, _ = is_user_active(context, user_id, chat_id)
 
