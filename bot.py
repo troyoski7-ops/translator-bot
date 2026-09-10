@@ -32,7 +32,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 # നിങ്ങളുടെ ടെലഗ്രാം യൂസർ ഐഡി (Owner ID)
 OWNER_USER_ID = 1689374364
 
-# Dynamic unlimited groups set via /setgroup command by Owner only
+# /setgroup വഴി അൺലിമിറ്റഡ് ആക്കിയ ഗ്രൂപ്പുകളുടെ ലിസ്റ്റ്
 UNLIMITED_GROUPS = set()
 
 async def handle_ping(request):
@@ -64,7 +64,8 @@ PREMIUM_THEMES = {
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
 
-ANIM_WELCOME_URL = "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif"
+# അതിശയകരവും എന്റർടൈനിങ് ആയതുമായ പുതിയ കോമഡി/വൈബ്രന്റ് ഗിഫ്റ്റ് ആനിമേഷൻ
+ANIM_WELCOME_URL = "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif"
 ANIM_STORE_URL = "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
@@ -98,31 +99,9 @@ def get_voice_info(lang_name):
 def smart_latin_fallback(text):
     if not text: return "text"
     if all(ord(c) < 128 for c in text): return text
-    
-    # Specific common phrases fallback mapping for perfect phonetics
-    lower_txt = text.strip()
-    if "Спокойной ночи" in lower_txt: return "Spokoynoy nochi"
-    if "آب گوشت" in lower_txt: return "Ab goosht"
-    if "സുഖ" in lower_txt: return "sukamano"
-    if "ഹലോ" in lower_txt: return "hallo"
-
-    # Generic transliteration mapping for Cyrillic/Persian/etc. to Latin approximation
-    cyrillic_to_latin = {
-        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
-        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'മ': 'm', 'н': 'n', 'о': 'o',
-        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
-        'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-        ' ': ' '
-    }
-    
-    transliterated = "".join([cyrillic_to_latin.get(c.lower(), c if ord(c) < 128 else '') for c in text])
-    transliterated = re.sub(r'\s+', ' ', transliterated).strip()
-    
-    if len(transliterated) > 1:
-        return transliterated
-        
+    if "സുഖ" in text or "ഹലോ" in text: return "sukamano" if "സുഖ" in text else "hallo"
     clean = "".join([c for c in text if ord(c) < 128])
-    return clean.strip() if len(clean) > 1 else "phonetic text"
+    return clean.strip() if len(clean) > 1 else "pronunciation"
 
 def _sync_translation_logic(text):
     try:
@@ -169,8 +148,11 @@ PLANS = {
 }
 
 def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: int, chat_id: int):
-    if user_id == OWNER_USER_ID or chat_id in UNLIMITED_GROUPS:
+    if user_id == OWNER_USER_ID:
         return True, "♾️ UNLIMITED", True
+        
+    if chat_id in UNLIMITED_GROUPS:
+        return True, "♾️ UNLIMITED GROUP", True
 
     str_user_id = str(user_id)
     if "premium_expiry" not in context.bot_data: context.bot_data["premium_expiry"] = {}
@@ -193,22 +175,22 @@ async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
 
     if user_id != OWNER_USER_ID:
-        await update.message.reply_text("⛔ ഈ കമാൻഡ് ഉപയോഗിക്കാൻ നിങ്ങൾക്ക് അനുവാദമില്ല (Owner Only).")
+        await update.message.reply_text("⛔ You are not authorized to use this command (Owner Only).")
         return
 
     if chat.type in ["group", "supergroup"]:
         UNLIMITED_GROUPS.add(chat.id)
-        await update.message.reply_text("🚀 <b>Success!</b> ഈ ഗ്രൂപ്പിലെ എല്ലാവർക്കും ഇനി മുതൽ അൺലിമിറ്റഡ് ആയി ഫ്രീയായി ട്രാൻസ്ലേറ്റ് ചെയ്യാം!", parse_mode="HTML")
+        await update.message.reply_text("🚀 <b>Success!</b> This group is now set to <b>Unlimited Free Translations</b> for everyone by Owner!", parse_mode="HTML")
     else:
-        await update.message.reply_text("⚠️ ഈ കമാൻഡ് ടെലഗ്രാം ഗ്രൂപ്പുകളിൽ മാത്രമേ ഉപയോഗിക്കാൻ സാധിക്കൂ!", parse_mode="HTML")
+        await update.message.reply_text("⚠️ This command can only be used inside a Telegram Group!", parse_mode="HTML")
 
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
-        "നിങ്ങളുടെ സൗജന്യ 100 മെസ്സേജുകൾ തീർന്നിരിക്കുന്നു!\n\n"
-        "• അൺലിമിറ്റഡ് ട്രാൻസ്ലേഷനുകൾ\n"
-        "• ഹൈ-ഡെഫനിഷൻ ഡ്യുവൽ ഓഡിയോ പ്രൊണൻസേഷൻ\n"
-        "• എക്സ്ക്ലൂസീവ് VIP തീമുകൾ\n\n"
+        "Your free 100 messages quota has expired!\n\n"
+        "• Unlimited Translations\n"
+        "• High-Definition Dual Audio Pronunciations\n"
+        "• Exclusive VIP Themes\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
         "• <b>3 Months ELITE:</b> 120 Stars\n"
         "• <b>1 Year LEGEND:</b> 399 Stars"
@@ -262,7 +244,7 @@ async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for key, item in PREMIUM_THEMES.items():
         label = f"✨ {item['label']}" if is_vip else f"🔒 {item['label']} [VIP]"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"settheme_{key}")])
-    await update.message.reply_text("🎨 <b>തീം തിരഞ്ഞെടുക്കുക:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text("🎨 <b>Select Holographic Theme:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -275,40 +257,40 @@ async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT
     selected = ALL_THEMES.get(theme_key)
     if not selected: return
     if selected.get("vip") and not is_vip:
-        await query.answer("🔒 VIP Locked! Telegram Stars ഉപയോഗിച്ച് അപ്ഗ്രേഡ് ചെയ്യുക.", show_alert=True)
+        await query.answer("🔒 VIP Locked! Upgrade using Telegram Stars.", show_alert=True)
         return
     if "user_theme" not in context.bot_data: context.bot_data["user_theme"] = {}
     context.bot_data["user_theme"][str(user_id)] = theme_key
-    await query.edit_message_text(f"✨ തീം മാറ്റിയിരിക്കുന്നു:\n<b>{selected['label']}</b>", parse_mode="HTML")
+    await query.edit_message_text(f"✨ Theme updated to:\n<b>{selected['label']}</b>", parse_mode="HTML")
 
 async def custom_bg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     _, _, is_vip = is_user_active(context, user_id, chat_id)
     if not is_vip:
-        await update.message.reply_text("🔒 <b>ഇത് VIP യൂസർമാർക്ക് മാത്രമുള്ള ഫീച്ചറാണ്!</b>", parse_mode="HTML")
+        await update.message.reply_text("🔒 <b>This is a VIP exclusive feature!</b>", parse_mode="HTML")
         return
     args = context.args
     if not args:
-        await update.message.reply_text("🖼 ഉപയോഗം: <code>/custombg [URL]</code>", parse_mode="HTML")
+        await update.message.reply_text("🖼 Usage: <code>/custombg [URL]</code>", parse_mode="HTML")
         return
     if "user_custom_bg" not in context.bot_data: context.bot_data["user_custom_bg"] = {}
     context.bot_data["user_custom_bg"][str(user_id)] = args[0]
-    await update.message.reply_text("✅ ബാക്ക്ഗ്രൗണ്ട് സേവ് ചെയ്തു!", parse_mode="HTML")
+    await update.message.reply_text("✅ Custom background saved successfully!", parse_mode="HTML")
 
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     _, status_val, _ = is_user_active(context, user_id, chat_id)
-    await update.message.reply_text(f"📊 <b>നിങ്ങളുടെ ക്വാട്ട:</b> {status_val}", parse_mode="HTML")
+    await update.message.reply_text(f"📊 <b>Your Quota:</b> {status_val}", parse_mode="HTML")
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = True
-    await update.message.reply_text("⏸ പോസ് ചെയ്തിരിക്കുന്നു.", parse_mode="HTML")
+    await update.message.reply_text("⏸ Bot paused successfully.", parse_mode="HTML")
 
 async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
-    await update.message.reply_text("▶️ റീസ്യൂം ചെയ്തു.", parse_mode="HTML")
+    await update.message.reply_text("▶️ Bot resumed successfully.", parse_mode="HTML")
 
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
@@ -322,7 +304,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
     if not update.message or not update.message.voice: return
 
-    placeholder = await update.message.reply_text("🎙 <i>വോയ്സ് നോട്ട് പരിശോധിക്കുന്നു...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("🎙 <i>Processing voice note...</i>", parse_mode="HTML")
     voice = update.message.voice
     file = await context.bot.get_file(voice.file_id)
     
@@ -337,7 +319,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await placeholder.delete()
         await process_and_reply(update, context, trans_text)
     except Exception as e:
-        await placeholder.edit_text(f"⚠️ വോയ്സ് എറർ: {str(e)[:40]}")
+        await placeholder.edit_text(f"⚠️ Voice error: {str(e)[:40]}")
     finally:
         for p in [ogg_path, mp3_path]:
             if os.path.exists(p):
@@ -355,7 +337,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await send_store_menu(update.effective_chat.id, context)
         return
 
-    placeholder = await update.message.reply_text("⚡ <i>തർജ്ജമ ചെയ്യുന്നു...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("⚡ <i>Translating...</i>", parse_mode="HTML")
     res = await execute_translation(text)
 
     if "error" in res:
@@ -381,20 +363,6 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p}</b></tg-spoiler>\n" if latin_p else ""
     meaning_en_block = f"📖 <b>Meaning ({trg_lang.upper()}): {translation}</b>\n" if translation else ""
     cultural_block = f"💡 <i>Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
-
-    card_text = (
-        f"👤 <b>{user_name}</b>\n"
-        f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['flag']}</code>\n"
-        f"────────────────────────\n\n"
-        f"💬 <b>{translation}</b>\n\n"
-        f"{native_p_block}"
-        f"{latin_p_block}"
-        f"{meaning_en_block}"
-        f"{cultural_block}\n"
-        f"────────────────────────\n"
-        f"🔋 Quota: {status_val}"
-    )
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
