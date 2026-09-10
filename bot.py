@@ -132,11 +132,11 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
         )
         prompt = f"{system_instruction}\n\nMessage: \"{text}\""
 
-    max_retries = 3
+    max_retries = 4
     for attempt in range(max_retries):
         try:
             completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="llama-3.1-8b-instant",
                 messages=[
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": prompt}
@@ -158,12 +158,12 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
                 return parsed
         except Exception as e:
             err_str = str(e)
-            if "503" in err_str or "unavailable" in err_str.lower() or "404" in err_str:
-                time.sleep(1.5)
+            if "429" in err_str or "rate_limit" in err_str.lower() or "busy" in err_str.lower():
+                time.sleep(2.0 * (attempt + 1))
                 continue
             return {"error": f"Groq Error: {err_str[:60]}"}
 
-    return {"error": "Groq Server Busy."}
+    return {"error": "Groq Rate Limit Exceeded. Please wait a moment."}
 
 async def execute_translation(text, recent_languages=None, is_group=False):
     return await asyncio.to_thread(_sync_groq_call, text, recent_languages, is_group)
