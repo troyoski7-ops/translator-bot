@@ -1,8 +1,17 @@
 import os
+import re
 import io
 import time
 import asyncio
-import aiohttp
+import subprocess
+import sys
+
+try:
+    from groq import Groq
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "groq"])
+    from groq import Groq
+
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
@@ -24,6 +33,8 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+# റെണ്ടർ എൻവയോൺമെന്റിൽ നിന്ന് കീ സുരക്ഷിതമായി എടുക്കും (ഗിറ്റ്‌ഹബ്ബ് ബ്ലോക്ക് ചെയ്യുകയേ ഇല്ല)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -83,37 +94,50 @@ def get_voice_info(lang_name):
             return v
     return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
 
-async def execute_translation(text, recent_languages=None, is_group=False):
-    # കീയുടെ ആവശ്യമില്ലാത്ത പബ്ലിക് ഫ്രീ ട്രാൻസ്‌ലേഷൻ സിസ്റ്റം
-    target_lang = "ml" if is_text_english(text) else "en"
-    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target_lang}&dt=t&q={text}"
-    
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    translated_text = data[0][0][0]
-                    detected_lang = data[2] if len(data) > 2 else "auto"
-                    return {
-                        "src": detected_lang.upper(),
-                        "trg": "Malayalam" if target_lang == "ml" else "English",
-                        "trans": translated_text,
-                        "meaning": translated_text,
-                        "native_p": "",
-                        "latin_p": ""
-                    }
-        except Exception as e:
-            return {"error": f"Translation error: {str(e)[:50]}"}
-    return {"error": "Translation failed."}
+def _sync_groq_call(text):
+    if not GROQ_API_KEY:
+        return {"error": "GROQ_API_KEY is missing in Render Environment Variables!"}
 
-def is_text_english(text):
+    client = Groq(api_key=GROQ_API_KEY)
+    
+    system_prompt = (
+        "You are a professional multi-lingual translator and tutor.\n"
+        "Rules:\n"
+        "1. Detect the source language accurately.\n"
+        "2. If input is English, translate to Malayalam. If input is in any other language, translate to English.\n"
+        "3. Output MUST strictly contain these 4 lines with exact prefixes and nothing else:\n"
+        "SRC: [Source Language Name]\n"
+        "TRG: [Target Language Name]\n"
+        "TRANS: [Translated Text]\n"
+        "MEANING: [English meaning]"
+    )
+
     try:
-        text.encode(encoding='utf-8').decode('ascii')
-    except UnicodeDecodeError:
-        return False
-    else:
-        return True
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Message: \"{text}\""}
+            ],
+            temperature=0.3,
+        )
+        raw = completion.choices[0].message.content.strip()
+        parsed = {}
+        for line in raw.splitlines():
+            line = line.strip()
+            if line.startswith("SRC:"): parsed["src"] = line.replace("SRC:", "").strip()
+            elif line.startswith("TRG:"): parsed["trg"] = line.replace("TRG:", "").strip()
+            elif line.startswith("TRANS:"): parsed["trans"] = line.replace("TRANS:", "").strip()
+            elif line.startswith("MEANING:"): parsed["meaning"] = line.replace("MEANING:", "").strip()
+
+        if parsed.get("trans"):
+            return parsed
+        return {"error": "Invalid response format from Groq."}
+    except Exception as e:
+        return {"error": f"Groq Error: {str(e)[:60]}"}
+
+async def execute_translation(text):
+    return await asyncio.to_thread(_sync_groq_call, text)
 
 FREE_LIMIT = 100
 PLANS = {
@@ -142,7 +166,7 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
         "Free translation quota exhausted!\n\n"
-        "• Unlimited Text Translations\n"
+        "• Unlimited Text Translations & AI Features\n"
         "• High-Definition Dual Audio Pronunciations\n"
         "• Secret VIP Luxury Themes\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
@@ -167,9 +191,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bg_url = active_theme["url"]
     
     welcome = (
-        f"🌌 <b>QUANTUM TRANSLATOR BRIDGE</b> 🌌\n\n"
-        "✨ Send any text in English to translate to Malayalam, or any other language to translate to English!\n"
-        "🔊 Dual Audio buttons included for pronunciation.\n\n"
+        f"🌌 <b>GROQ LIGHTNING TRANSLATOR BRIDGE</b> 🌌\n\n"
+        "✨ Send any text to translate instantly with lightning speed!\n"
+        "🔊 Dual Audio buttons included for native pronunciation.\n\n"
         "Send any text to begin!"
     )
     try:
@@ -191,7 +215,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = update.message.text.strip()
-    placeholder = await update.message.reply_text("⚡ <i>Translating...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("⚡ <i>Lightning Translation...</i>", parse_mode="HTML")
 
     res = await execute_translation(text)
 
@@ -202,13 +226,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     src_lang = res.get("src", "Auto")
     trg_lang = res.get("trg", "Malayalam")
     translation = res.get("trans", text)
+    meaning_en = res.get("meaning", text)
 
     if not is_vip:
         context.chat_data["free_credits"][user_id] -= 1
         _, status_val, _ = is_user_active(context, user_id)
 
     src_info = get_voice_info(src_lang)
-    trg_info = get_voice_info("malayalam" if trg_lang == "Malayalam" else "english")
+    trg_info = get_voice_info("malayalam" if "malayalam" in trg_lang.lower() else "english")
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
@@ -216,13 +241,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"────────────────────────\n\n"
         f"💬 <b>{translation}</b>\n\n"
+        f"📖 <i>Meaning:</i> {meaning_en}\n\n"
         f"────────────────────────\n"
-        f"🔋 Quota: {status_val}"
+        f"⚡ Quota: {status_val}"
     )
 
     msg_id = placeholder.message_id
     context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "gtts_code": "en", "lang": src_lang}
-    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "gtts_code": "ml" if trg_lang == "Malayalam" else "en", "lang": trg_lang}
+    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "gtts_code": "ml" if "malayalam" in trg_lang.lower() else "en", "lang": trg_lang}
 
     keyboard = [
         [
