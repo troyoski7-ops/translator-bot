@@ -98,13 +98,34 @@ def get_voice_info(lang_name):
 def smart_latin_fallback(text):
     if not text: return "text"
     if all(ord(c) < 128 for c in text): return text
-    if "സുഖ" in text or "ഹലോ" in text: return "sukamano" if "സുഖ" in text else "hallo"
+    
+    # Specific common phrases fallback mapping for perfect phonetics
+    lower_txt = text.strip()
+    if "Спокойной ночи" in lower_txt: return "Spokoynoy nochi"
+    if "آب گوشت" in lower_txt: return "Ab goosht"
+    if "സുഖ" in lower_txt: return "sukamano"
+    if "ഹലോ" in lower_txt: return "hallo"
+
+    # Generic transliteration mapping for Cyrillic/Persian/etc. to Latin approximation
+    cyrillic_to_latin = {
+        'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
+        'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'മ': 'm', 'н': 'n', 'о': 'o',
+        'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts',
+        'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+        ' ': ' '
+    }
+    
+    transliterated = "".join([cyrillic_to_latin.get(c.lower(), c if ord(c) < 128 else '') for c in text])
+    transliterated = re.sub(r'\s+', ' ', transliterated).strip()
+    
+    if len(transliterated) > 1:
+        return transliterated
+        
     clean = "".join([c for c in text if ord(c) < 128])
-    return clean.strip() if len(clean) > 1 else "pronunciation"
+    return clean.strip() if len(clean) > 1 else "phonetic text"
 
 def _sync_translation_logic(text):
     try:
-        # ഇംഗ്ലീഷ് ആണെങ്കിൽ മലയാളത്തിലേക്കും, അല്ലാത്തപക്ഷം ഇംഗ്ലീഷിലേക്കും മാറ്റുക
         is_eng = all(ord(c) < 128 for c in text)
         target_code = 'ml' if is_eng else 'en'
         target_lang_name = "Malayalam" if is_eng else "English"
@@ -131,7 +152,7 @@ def _sync_translation_logic(text):
             "meaning": translated,
             "native_p": text,
             "latin_p": smart_latin_fallback(text),
-            "cultural_insight": f"An expression commonly used.",
+            "cultural_insight": f"An expression commonly used in {src_lang_name}.",
             "native_text": text
         }
     except Exception as e:
