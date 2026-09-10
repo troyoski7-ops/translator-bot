@@ -142,7 +142,7 @@ def _sync_translation_logic(text):
             "TRANS: [Translated Text]"
         )
         completion = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": f"Message: \"{text}\""}
