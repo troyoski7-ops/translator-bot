@@ -103,15 +103,16 @@ def _sync_translation_logic(text):
             system_instruction = (
                 "You are an expert universal multi-lingual translation bridge and language tutor.\n"
                 "Rules:\n"
-                "1. Detect ANY source language automatically (English, German, Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, or any other language in the world).\n"
-                "2. If input is English/German, translate to Malayalam/English. If input is in any other language, translate to English or Malayalam so group users understand.\n"
-                "3. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
+                "1. Accurately detect source language (supports Persian, Farsi, Azerbaijani, Uzbek, Kazakh, Tajik, Turkish, German, English, Malayalam, etc.).\n"
+                "2. If input is English/German, translate to Malayalam. If input is in any other language, translate to English.\n"
+                "3. Provide strict English Latin romanized phonetic spelling in LATIN_P (e.g., 'sukamano' for സുഖമാണോ, 'ab-e gusht' for آب گوشت).\n"
+                "4. Output MUST strictly contain these 6 lines with exact prefixes and nothing else:\n"
                 "SRC: [Source Language Name]\n"
                 "TRG: [Target Language Name]\n"
                 "TRANS: [Translated Text in Target Language]\n"
                 "MEANING: [English meaning of the text]\n"
-                "NATIVE_P: [Phonetic in native script/original text]\n"
-                "LATIN_P: [Phonetic pronunciation in English Latin alphabet]"
+                "NATIVE_P: [Original native text/script]\n"
+                "LATIN_P: [English Latin phonetic alphabet representation]"
             )
             completion = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -221,7 +222,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "🌐 <b>Universal Multi-User & Group Support:</b>\n"
-        "• Add this bot to any group chat. User 1, User 2 can speak ANY language in the world (German, Persian, Turkish, Uzbek, etc.) and it will auto-translate with full phonetics!\n"
+        "• Send text or voice notes in any language (Persian, Turkish, Uzbek, etc.).\n"
         "• 🔊 <b>HD Audio Synthesis:</b> Get instant dual audio buttons with language flags!\n\n"
         "<b>Commands:</b>\n"
         "🎨 /theme • Holographic UI Theme\n"
@@ -367,15 +368,20 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     src_info = get_voice_info(src_lang)
     trg_info = get_voice_info(trg_lang)
 
-    native_p_block = f"🗣 <i>Phonetic:</i> <code>{native_p}</code>\n" if native_p else ""
+    # Order requested and highlighted meaning:
+    # 1. Native Phonetic (with language flag)
+    # 2. English Phonetics (Latin alphabet)
+    # 3. Meaning (EN) - Highlighted (Bold)
+    # 4. Meaning (Native) - Highlighted (Bold)
+    native_p_block = f"🗣 <i>Phonetic ({src_info['flag']} {src_lang}):</i> <code>{native_p}</code>\n" if native_p else ""
     latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler>{latin_p}</tg-spoiler>\n" if latin_p else ""
-    meaning_en_block = f"📖 <i>Meaning (EN):</i> <b>{translation}</b>\n" if translation else ""
-    meaning_native_block = f"📖 <i>Meaning ({src_lang}):</i> <b>{native_text}</b>\n" if native_text else ""
+    meaning_en_block = f"📖 <b>Meaning (EN): {translation}</b>\n" if translation else ""
+    meaning_native_block = f"📖 <b>Meaning ({src_lang}): {native_text}</b>\n" if native_text else ""
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
         f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"────────────────────────\n\n"
         f"💬 <b>{translation}</b>\n\n"
         f"{native_p_block}"
