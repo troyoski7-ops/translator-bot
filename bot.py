@@ -33,8 +33,6 @@ from telegram.ext import (
 )
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-
-# താങ്കൾ നൽകിയ ഗ്രോഖ് കീ ഇവിടെ കൃത്യമായി ചേർത്തിരിക്കുന്നു
 GROQ_API_KEY = "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"
 
 async def handle_ping(request):
@@ -160,7 +158,7 @@ def _sync_groq_call(text, recent_languages=None, is_group=False):
                 return parsed
         except Exception as e:
             err_str = str(e)
-            if "503" in err_str or "unavailable" in err_str.lower():
+            if "503" in err_str or "unavailable" in err_str.lower() or "404" in err_str:
                 time.sleep(1.5)
                 continue
             return {"error": f"Groq Error: {err_str[:60]}"}
@@ -504,7 +502,7 @@ async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_
 
     await context.bot.send_invoice(
         chat_id=query.message.chat_id,
-        title=f"⭐️ {plan['name']}",
+-        title=f"⭐️ {plan['name']}",
         description=f"Unlock VIP features for {plan['days']} days.",
         payload=plan_key,
         provider_token="",
