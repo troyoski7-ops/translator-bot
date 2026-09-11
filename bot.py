@@ -113,13 +113,6 @@ def _sync_translation_logic(text, target_override=None):
             translated = "".join([item[0] for item in res_data[0] if item[0]])
             detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
 
-        if not translated:
-            translated = text
-
-        if target == 'ml':
-            translated = re.sub(r'\s+([അ-ഹൗൺംഃ്ക്-ഹ്ലവ്വഷ്സഹ])', r'\1', translated)
-            translated = re.sub(r'(\u0d3c)\s+', r'\1', translated)
-
         phonetic_text = text
         try:
             url_phonetic = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text)}"
@@ -133,6 +126,9 @@ def _sync_translation_logic(text, target_override=None):
                             break
         except Exception:
             pass
+
+        if not translated:
+            return {"error": "Translation failed. Please try again."}
 
         lang_names = {
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
@@ -454,7 +450,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="asklang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="asklang_fr")],
     ]
     await update.message.reply_text(
-        "🖼 <b>Image received!</b>\nPlease type the text content or send a PDF document for instant translation.\n\nWhich language do you want to translate into?",
+        "🖼 <b>Image received!</b>\nPlease choose your target language below:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -489,18 +485,18 @@ async def asklang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     file_info = context.user_data.pop("pending_file_type")
-    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Processing document...", parse_mode="HTML")
+    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Processing file...", parse_mode="HTML")
     
     await process_media_file_direct(update.effective_chat.id, context, file_info["file_id"], file_info["type"], target_code, update)
 
 async def process_media_file_direct(chat_id, context, file_id, file_type, target_code, update_obj):
-    placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Reading document & translating...</i>", parse_mode="HTML")
+    placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Reading file & translating...</i>", parse_mode="HTML")
     extracted_text = ""
 
     try:
         file = await context.bot.get_file(file_id)
         if file_type == "photo":
-            extracted_text = "Please type the text directly into chat for instant translation."
+            extracted_text = "Photo received. For instant translation, please send text messages directly."
         else:
             doc_path = f"doc_{chat_id}_{int(time.time())}.file"
             await file.download_to_drive(doc_path)
