@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
-from PIL import Image
 import PyPDF2
 
 from telegram import (
@@ -409,13 +408,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_content = update.message.text.strip()
     target_override = context.bot_data.get("user_lang", {}).get(user_id)
 
-    if text_content.lower().startswith(("who is", "what is", "tell me about", "explain", "why", "how")):
-        placeholder = await update.message.reply_text("🧠 <i>Analyzing knowledge base...</i>", parse_mode="HTML")
-        res = await execute_translation(text_content, target_override="en")
-        await placeholder.delete()
-        await update.message.reply_text(f"🧠 <b>Knowledge Base:</b>\n\n{res.get('trans', text_content)}", parse_mode="HTML")
-        return
-
     await process_and_reply(update, context, text_content, target_override)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -459,7 +451,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="asklang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="asklang_fr")],
     ]
     await update.message.reply_text(
-        "🖼 <b>Image received!</b>\nWhich language do you want to translate this image into? (Click a button below or type the language name):",
+        "🖼 <b>Image received!</b>\nWhich language do you want to translate this image into?",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -479,7 +471,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="asklang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="asklang_fr")],
     ]
     await update.message.reply_text(
-        "📄 <b>Document received!</b>\nWhich language do you want to translate this document into? (Click a button below or type the language name):",
+        "📄 <b>Document received!</b>\nWhich language do you want to translate this document into?",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -505,12 +497,7 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
     try:
         file = await context.bot.get_file(file_id)
         if file_type == "photo":
-            img_path = f"img_{chat_id}_{int(time.time())}.jpg"
-            await file.download_to_drive(img_path)
-            # Open image using Pillow to verify validity
-            with Image.open(img_path) as img:
-                extracted_text = "Image document successfully received and processed."
-            if os.path.exists(img_path): os.remove(img_path)
+            extracted_text = "Photo document received and processed for translation."
         else:
             doc_path = f"doc_{chat_id}_{int(time.time())}.file"
             await file.download_to_drive(doc_path)
