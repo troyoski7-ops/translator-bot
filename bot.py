@@ -243,7 +243,14 @@ async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🇷🇺 Russian (RU)", callback_data="set_target_ru"), InlineKeyboardButton("🇩🇪 German (DE)", callback_data="set_target_de")],
         [InlineKeyboardButton("🇹🇷 Turkish (TR)", callback_data="set_target_tr"), InlineKeyboardButton("🇰🇿 Kazakh (KK)", callback_data="set_target_kk")],
-        [InlineKeyboardButton("🇺🇿 Uzbek (UZ)", callback_data="set_target_uz"), InlineKeyboardButton("🇬🇧 English (EN)", callback_data="set_target_en")],
+        [InlineKeyboardButton("🇺🇿 Uzbek (UZ)", callback_data="set_target_uz"), InlineKeyboardButton("🇹🇯 Tajik (TG)", callback_data="set_target_tg")],
+        [InlineKeyboardButton("🇮🇷 Persian (FA)", callback_data="set_target_fa"), InlineKeyboardButton("🇫🇷 French (FR)", callback_data="set_target_fr")],
+        [InlineKeyboardButton("🇪🇸 Spanish (ES)", callback_data="set_target_es"), InlineKeyboardButton("🇦🇪 Arabic (AR)", callback_data="set_target_ar")],
+        [InlineKeyboardButton("🇮🇳 Hindi (HI)", callback_data="set_target_hi"), InlineKeyboardButton("🇨🇳 Chinese (ZH)", callback_data="set_target_zh")],
+        [InlineKeyboardButton("🇯🇵 Japanese (JA)", callback_data="set_target_ja"), InlineKeyboardButton("🇰🇷 Korean (KO)", callback_data="set_target_ko")],
+        [InlineKeyboardButton("🇮🇹 Italian (IT)", callback_data="set_target_it"), InlineKeyboardButton("🇬🇧 English (EN)", callback_data="set_target_en")],
+        [InlineKeyboardButton("🇺🇦 Ukrainian (UK)", callback_data="set_target_uk"), InlineKeyboardButton("🇻🇳 Vietnamese (VI)", callback_data="set_target_vi")],
+        [InlineKeyboardButton("🇬🇪 Georgian (KA)", callback_data="set_target_ka"), InlineKeyboardButton("🇦🇿 Azerbaijani (AZ)", callback_data="set_target_az")],
     ]
     await update.message.reply_text(
         "⚙️ <b>Two-Way Translation Settings:</b>\nChoose the partner language for automatic translation in this chat/group:",
@@ -263,6 +270,18 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.bot_data["chat_target_lang"][chat_id] = lang_code
     await query.edit_message_text(f"✅ Partner language successfully set to: <b>{lang_code.upper()}</b> for this chat!", parse_mode="HTML")
 
+async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
+    keyboard = []
+    for key, item in STANDARD_THEMES.items():
+        keyboard.append([InlineKeyboardButton(item["label"], callback_data=f"settheme_{key}")])
+    for key, item in PREMIUM_THEMES.items():
+        label = f"✨ {item['label']}" if is_vip else f"🔒 {item['label']} [VIP]"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"settheme_{key}")])
+    await update.message.reply_text("🎨 <b>Select Holographic Theme:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+
 async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -279,6 +298,36 @@ async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT
     if "user_theme" not in context.bot_data: context.bot_data["user_theme"] = {}
     context.bot_data["user_theme"][str(user_id)] = theme_key
     await query.edit_message_text(f"✨ Theme updated to:\n<b>{selected['label']}</b>", parse_mode="HTML")
+
+async def custom_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
+    if not is_vip:
+        await update.message.reply_text("🔒 <b>/customsong is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("🎵 Usage: <code>/customsong [Direct MP3 Audio URL]</code>", parse_mode="HTML")
+        return
+    if "user_custom_song" not in context.bot_data: context.bot_data["user_custom_song"] = {}
+    context.bot_data["user_custom_song"][str(user_id)] = args[0]
+    await update.message.reply_text("✅ Custom VIP Song saved successfully! Use /vibe to play it.", parse_mode="HTML")
+
+async def custom_theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
+    if not is_vip:
+        await update.message.reply_text("🔒 <b>/customtheme is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("🎨 Usage: <code>/customtheme [Giphy/Image URL]</code>", parse_mode="HTML")
+        return
+    if "user_custom_bg" not in context.bot_data: context.bot_data["user_custom_bg"] = {}
+    context.bot_data["user_custom_bg"][str(user_id)] = args[0]
+    await update.message.reply_text("✅ Custom VIP Theme background saved successfully!", parse_mode="HTML")
 
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -320,6 +369,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>Commands:</b>\n"
         "⚙️ /settings • Two-Way Language Settings\n"
         "🎧 /vibe • Play Chill Vibe Music\n"
+        "🎵 /customsong • Set Custom VIP Song [VIP]\n"
+        "🎨 /customtheme • Set Custom Theme URL [VIP]\n"
+        "🎨 /theme • Holographic UI Theme\n"
         "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • VIP Vault\n\n"
@@ -629,6 +681,9 @@ async def main():
         BotCommand("start", "Start Translator Bridge"),
         BotCommand("settings", "Configure Two-Way Partner Language"),
         BotCommand("vibe", "Play Chill Vibe Music"),
+        BotCommand("customsong", "Set VIP Custom Song [VIP]"),
+        BotCommand("customtheme", "Set VIP Custom Theme [VIP]"),
+        BotCommand("theme", "Holographic UI Theme"),
         BotCommand("status", "Quota & Core Status"),
         BotCommand("stop", "Pause Bot"),
         BotCommand("resume", "Resume Bot"),
@@ -638,6 +693,9 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("vibe", vibe_command))
+    app.add_handler(CommandHandler("customsong", custom_song_command))
+    app.add_handler(CommandHandler("customtheme", custom_theme_command))
+    app.add_handler(CommandHandler("theme", theme_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("resume", resume_command))
