@@ -3,5 +3,5 @@ gtts
 edge-tts
 aiohttp
 pillow
-pytesseract
+requests
 PyPDF2
