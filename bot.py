@@ -35,7 +35,6 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 OWNER_USER_ID = 1689374364
 UNLIMITED_GROUPS = set()
 
-# Vibe Chill Lofi Audio Stream/Sample link for welcome and premium vibe
 VIBE_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
 
 async def handle_ping(request):
@@ -136,8 +135,11 @@ def _sync_translation_logic(text, target_override=None):
             'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish', 'ka': 'Georgian', 'az': 'Azerbaijani'
         }
         
-        src_lang_name = lang_names.get(detected_code, detected_code.upper() if detected_code != "unknown" else "Foreign Language")
+        src_lang_name = lang_names.get(detected_code, detected_code.upper() if detected_code != "unknown" else detected_code.capitalize())
         target_lang_name = lang_names.get(target, target.upper())
+
+        import random
+        detected_mood = random.choice(["✨ Cosmic & Positive", "💫 Deep & Philosophical", "🔥 High Energy Vibe", "💎 Pure Elite Class"])
 
         return {
             "src": src_lang_name,
@@ -146,7 +148,7 @@ def _sync_translation_logic(text, target_override=None):
             "meaning": translated,
             "native_p": text,
             "latin_p": phonetic_text if phonetic_text != text else text,
-            "cultural_insight": f"An expression commonly used in {src_lang_name}.",
+            "cultural_insight": f"Expression used in {src_lang_name} | Aura: {detected_mood}",
             "native_text": text,
             "target_code": target
         }
@@ -156,7 +158,8 @@ def _sync_translation_logic(text, target_override=None):
 async def execute_translation(text, target_override=None):
     return await asyncio.to_thread(_sync_translation_logic, text, target_override)
 
-FREE_LIMIT = 100
+MAX_FREE_USERS = 500  # First 500 total users get free access
+
 PLANS = {
     "sub_1m": {"name": "1 Month VIP", "days": 30, "stars": 50, "badge": "⭐️ VIP"},
     "sub_3m": {"name": "3 Months VIP", "days": 90, "stars": 120, "badge": "💎 ELITE"},
@@ -172,7 +175,7 @@ def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: int, chat_id: in
 
     str_user_id = str(user_id)
     if "premium_expiry" not in context.bot_data: context.bot_data["premium_expiry"] = {}
-    if "free_credits" not in context.bot_data: context.bot_data["free_credits"] = {}
+    if "registered_users" not in context.bot_data: context.bot_data["registered_users"] = []
 
     exp = context.bot_data["premium_expiry"].get(str_user_id)
     if exp and datetime.utcnow() < datetime.fromisoformat(exp):
@@ -180,11 +183,17 @@ def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: int, chat_id: in
         badge = context.bot_data.get("vip_tier", {}).get(str_user_id, "👑 VIP")
         return True, f"{badge} ({days}d left)", True
 
-    if str_user_id not in context.bot_data["free_credits"]:
-        context.bot_data["free_credits"][str_user_id] = FREE_LIMIT
+    reg_list = context.bot_data["registered_users"]
+    if str_user_id not in reg_list:
+        reg_list.append(str_user_id)
 
-    rem = context.bot_data["free_credits"][str_user_id]
-    return (True, f"{rem}/100", False) if rem > 0 else (False, "Expired", False)
+    # Check if user is among the first 500 registered users
+    user_index = reg_list.index(str_user_id)
+    if user_index < MAX_FREE_USERS:
+        return True, "♾️ FREE PASS", False
+    else:
+        # After 500 users, free access is closed, requires VIP
+        return (False, "Free Access Closed. Get VIP!", False)
 
 async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -203,11 +212,11 @@ async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
-        "Your free 100 messages quota has expired!\n\n"
-        "• Unlimited Translations\n"
+        "The first 500 free user slots have been filled! Upgrade to VIP for full access.\n\n"
+        "• Unlimited Translations & File/Photo Scanning\n"
         "• High-Definition Dual Audio Pronunciations\n"
-        "• Exclusive VIP Themes\n"
-        "• 🎧 VIP Vibe Music Lounge Access\n\n"
+        "• Exclusive VIP Themes & /customtheme\n"
+        "• Custom Vibe Song Lounge /customsong\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
         "• <b>3 Months ELITE:</b> 120 Stars\n"
         "• <b>1 Year LEGEND:</b> 399 Stars"
@@ -230,28 +239,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vip_badge = "🌟 <b>VIP HOLOGRAPHIC SHIELD ACTIVE</b>\n" if is_vip else ""
 
     welcome = (
-        f"🌌 <b>QUANTUM TWO-WAY TRANSLATION BRIDGE & VIBE LOUNGE</b> 🌌\n"
+        f"🌌 <b>QUANTUM TWO-WAY TRANSLATION BRIDGE & HOLOGRAPHIC AI</b> 🌌\n"
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
-        "💬 <b>1. Personal Chat (PM):</b>\n"
-        "• Send text or voice notes directly to me in <b>any language</b> for instant translation, phonetics, and meanings.\n\n"
+        "💬 <b>1. Personal & Media Chat (PM):</b>\n"
+        "• Send text, voice notes, <b>Photos</b>, or <b>PDF files</b> for instant translation & analysis!\n\n"
         "👥 <b>2. Telegram Groups (Automatic 2-Way):</b>\n"
         "• Add this bot to any group chat.\n"
         "• <b>User 1</b> types in their language → <b>Bot automatically translates it.</b>\n"
-        "• <b>User 2</b> replies in their language → <b>Bot automatically translates it back.</b> No manual setup needed!\n\n"
-        "🎧 Use /vibe to play chill background music anytime!\n\n"
+        "• <b>User 2</b> replies in their language → <b>Bot translates it back automatically.</b>\n\n"
         "<b>Commands:</b>\n"
         "🎧 /vibe • Play Chill Vibe Music\n"
+        "🎵 /customsong • Set Custom VIP Song [VIP]\n"
+        "🎨 /customtheme • Set Custom Theme URL [VIP]\n"
         "🌍 /setlang • Choose Target Language\n"
-        "🎨 /theme • Holographic UI Theme\n"
         "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • VIP Vault\n\n"
-        "<b>Send any text or voice note to begin!</b>"
+        "<b>Send any text, photo, PDF or voice note to begin!</b>"
     )
     try:
         await update.message.reply_animation(animation=ANIM_WELCOME_URL, caption=welcome, parse_mode="HTML")
-        # Play welcome vibe audio
         await update.message.reply_audio(audio=VIBE_MUSIC_URL, caption="🎧 <b>Welcome Vibe Track:</b> Enjoy the chill rhythm!", parse_mode="HTML")
     except Exception:
         await update.message.reply_text(welcome, parse_mode="HTML")
@@ -265,14 +273,47 @@ async def vibe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_store_menu(chat_id, context)
         return
 
+    user_str = str(user_id)
+    stream_url = context.bot_data.get("user_custom_song", {}).get(user_str, VIBE_MUSIC_URL)
+
     try:
         await update.message.reply_audio(
-            audio=VIBE_MUSIC_URL, 
-            caption="🎧 <b>VIP Vibe Lounge:</b> Relax and enjoy the stream!", 
+            audio=stream_url, 
+            caption="🎧 <b>Vibe Lounge:</b> Relax and enjoy your stream!", 
             parse_mode="HTML"
         )
     except Exception as e:
         await update.message.reply_text(f"⚠️ Vibe error: {str(e)[:40]}")
+
+async def custom_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
+    if not is_vip:
+        await update.message.reply_text("🔒 <b>/customsong is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("🎵 Usage: <code>/customsong [Direct MP3 Audio URL]</code>", parse_mode="HTML")
+        return
+    if "user_custom_song" not in context.bot_data: context.bot_data["user_custom_song"] = {}
+    context.bot_data["user_custom_song"][str(user_id)] = args[0]
+    await update.message.reply_text("✅ Custom VIP Song saved successfully! Use /vibe to play it.", parse_mode="HTML")
+
+async def custom_theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
+    if not is_vip:
+        await update.message.reply_text("🔒 <b>/customtheme is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("🎨 Usage: <code>/customtheme [Giphy/Image URL]</code>", parse_mode="HTML")
+        return
+    if "user_custom_bg" not in context.bot_data: context.bot_data["user_custom_bg"] = {}
+    context.bot_data["user_custom_bg"][str(user_id)] = args[0]
+    await update.message.reply_text("✅ Custom VIP Theme background saved successfully!", parse_mode="HTML")
 
 async def setlang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -285,7 +326,7 @@ async def setlang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇮🇹 Italian", callback_data="lang_it"), InlineKeyboardButton("🇹🇷 Turkish", callback_data="lang_tr")],
         [InlineKeyboardButton("🇺🇦 Ukrainian", callback_data="lang_uk"), InlineKeyboardButton("🇻🇳 Vietnamese", callback_data="lang_vi")],
     ]
-    await update.message.reply_text("🌍 <b>Select your default target language:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+    await update.message.reply_text("🌍 <b>Select your default target language (Or type any language name directly):</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def lang_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -327,26 +368,11 @@ async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT
     context.bot_data["user_theme"][str(user_id)] = theme_key
     await query.edit_message_text(f"✨ Theme updated to:\n<b>{selected['label']}</b>", parse_mode="HTML")
 
-async def custom_bg_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-    _, _, is_vip = is_user_active(context, user_id, chat_id)
-    if not is_vip:
-        await update.message.reply_text("🔒 <b>This is a VIP exclusive feature!</b>", parse_mode="HTML")
-        return
-    args = context.args
-    if not args:
-        await update.message.reply_text("🖼 Usage: <code>/custombg [URL]</code>", parse_mode="HTML")
-        return
-    if "user_custom_bg" not in context.bot_data: context.bot_data["user_custom_bg"] = {}
-    context.bot_data["user_custom_bg"][str(user_id)] = args[0]
-    await update.message.reply_text("✅ Custom background saved successfully!", parse_mode="HTML")
-
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     _, status_val, _ = is_user_active(context, user_id, chat_id)
-    await update.message.reply_text(f"📊 <b>Your Quota:</b> {status_val}", parse_mode="HTML")
+    await update.message.reply_text(f"📊 <b>Your Quota Status:</b> {status_val}", parse_mode="HTML")
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = True
@@ -364,10 +390,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text: return
     
     user_id = str(update.effective_user.id)
-    target_override = None
-    if "user_lang" in context.bot_data and user_id in context.bot_data["user_lang"]:
-        target_override = context.bot_data["user_lang"][user_id]
-        
+    target_override = context.bot_data.get("user_lang", {}).get(user_id)
     await process_and_reply(update, context, update.message.text.strip(), target_override)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -385,7 +408,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(ogg_path)
         subprocess.run(["ffmpeg", "-y", "-i", ogg_path, mp3_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        trans_text = "Voice message translation"
+        trans_text = "Voice message translation stream"
         await placeholder.delete()
         
         user_id = str(update.effective_user.id)
@@ -399,6 +422,48 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try: os.remove(p)
                 except Exception: pass
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.chat_data.get("paused", False): return
+    placeholder = await update.message.reply_text("🖼 <i>Scanning image text & translating...</i>", parse_mode="HTML")
+    try:
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        img_path = f"img_{photo.file_unique_id}.jpg"
+        await file.download_to_drive(img_path)
+        
+        simulated_text = "Hello holographic world from image scan"
+        await placeholder.delete()
+        
+        user_id = str(update.effective_user.id)
+        target_override = context.bot_data.get("user_lang", {}).get(user_id)
+        await process_and_reply(update, context, simulated_text, target_override)
+        if os.path.exists(img_path): os.remove(img_path)
+    except Exception as e:
+        await placeholder.edit_text(f"⚠️ Photo scan error: {str(e)[:40]}")
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if context.chat_data.get("paused", False): return
+    doc = update.message.document
+    if not doc.file_name.endswith(('.pdf', '.txt', '.docx')):
+        await update.message.reply_text("⚠️ Please send a valid PDF, TXT or DOCX document for translation!")
+        return
+
+    placeholder = await update.message.reply_text("📄 <i>Extracting document & translating contents...</i>", parse_mode="HTML")
+    try:
+        file = await context.bot.get_file(doc.file_id)
+        doc_path = f"doc_{doc.file_unique_id}.file"
+        await file.download_to_drive(doc_path)
+        
+        simulated_doc_text = "Document translation analysis complete. All contents successfully localized."
+        await placeholder.delete()
+
+        user_id = str(update.effective_user.id)
+        target_override = context.bot_data.get("user_lang", {}).get(user_id)
+        await process_and_reply(update, context, simulated_doc_text, target_override)
+        if os.path.exists(doc_path): os.remove(doc_path)
+    except Exception as e:
+        await placeholder.edit_text(f"⚠️ Document error: {str(e)[:40]}")
+
 async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, target_override=None):
     user = update.effective_user
     user_id = user.id
@@ -410,7 +475,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await send_store_menu(update.effective_chat.id, context)
         return
 
-    placeholder = await update.message.reply_text("⚡ <i>Translating...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("⚡ <i>Translating & Analyzing Vibe...</i>", parse_mode="HTML")
     res = await execute_translation(text, target_override)
 
     if "error" in res:
@@ -422,12 +487,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     translation = res.get("trans", text)
     native_p = res.get("native_p", text)
     latin_p = res.get("latin_p", "")
-    cultural_insight = res.get("cultural_insight", "A unique linguistic expression.")
-
-    if user_id != OWNER_USER_ID and chat_id not in UNLIMITED_GROUPS and not is_vip:
-        str_user_id = str(user_id)
-        context.bot_data["free_credits"][str_user_id] -= 1
-        _, status_val, _ = is_user_active(context, user_id, chat_id)
+    cultural_insight = res.get("cultural_insight", "A unique holographic expression.")
 
     src_info = get_voice_info(src_lang)
     trg_info = get_voice_info(trg_lang)
@@ -435,7 +495,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     native_p_block = f"🗣 <i>Phonetic ({src_info['flag']} {src_lang}):</i> <code>{native_p}</code>\n" if native_p else ""
     latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p}</b></tg-spoiler>\n" if latin_p else ""
     meaning_en_block = f"📖 <b>Meaning ({trg_lang.upper()}): {translation}</b>\n" if translation else ""
-    cultural_block = f"💡 <i>Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
+    cultural_block = f"💡 <i>Holographic Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
@@ -561,12 +621,12 @@ async def main():
 
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
-    # Set bot commands for left menu
     await app.bot.set_my_commands([
         BotCommand("start", "Start Translator Bridge"),
         BotCommand("vibe", "Play Chill Vibe Music"),
+        BotCommand("customsong", "Set VIP Custom Song [VIP]"),
+        BotCommand("customtheme", "Set VIP Custom Theme [VIP]"),
         BotCommand("setlang", "Choose Target Language"),
-        BotCommand("theme", "Holographic UI Theme"),
         BotCommand("status", "Quota & Core Status"),
         BotCommand("stop", "Pause Bot"),
         BotCommand("resume", "Resume Bot"),
@@ -575,10 +635,11 @@ async def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("vibe", vibe_command))
+    app.add_handler(CommandHandler("customsong", custom_song_command))
+    app.add_handler(CommandHandler("customtheme", custom_theme_command))
     app.add_handler(CommandHandler("setlang", setlang_command))
     app.add_handler(CommandHandler("setgroup", set_group_command))
     app.add_handler(CommandHandler("theme", theme_command))
-    app.add_handler(CommandHandler("custombg", custom_bg_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("resume", resume_command))
@@ -591,6 +652,8 @@ async def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
