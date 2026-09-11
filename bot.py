@@ -116,8 +116,7 @@ def _sync_translation_logic(text, target_override=None):
             detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
 
         if target == 'ml':
-            translated = re.sub(r'\s+([അ-ഹൗൺംഃ്ക്-ഹ്ലവ്വഷ്സഹ])', r'\1', translated)
-            translated = re.sub(r'(\u0d3c)\s+', r'\1', translated)
+            translated = re.sub(r'\s+([അ-ഹ])', r'\1', translated)
 
         phonetic_text = text
         try:
@@ -733,7 +732,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    app.add_handler(filters.Document.ALL, handle_document))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
