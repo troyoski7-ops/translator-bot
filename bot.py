@@ -113,6 +113,9 @@ def _sync_translation_logic(text, target_override=None):
             translated = "".join([item[0] for item in res_data[0] if item[0]])
             detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
 
+        if not translated:
+            translated = text
+
         if target == 'ml':
             translated = re.sub(r'\s+([അ-ഹൗൺംഃ്ക്-ഹ്ലവ്വഷ്സഹ])', r'\1', translated)
             translated = re.sub(r'(\u0d3c)\s+', r'\1', translated)
@@ -130,9 +133,6 @@ def _sync_translation_logic(text, target_override=None):
                             break
         except Exception:
             pass
-
-        if not translated:
-            return {"error": "Translation failed. Please try again."}
 
         lang_names = {
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
@@ -454,7 +454,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="asklang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="asklang_fr")],
     ]
     await update.message.reply_text(
-        "🖼 <b>Image received!</b>\nTo translate images properly like Google Translate, please send the text content directly as a message, or upload a PDF document.\n\nWhich language do you want to translate into?",
+        "🖼 <b>Image received!</b>\nPlease type the text content or send a PDF document for instant translation.\n\nWhich language do you want to translate into?",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
