@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
-from PIL import Image
 import PyPDF2
 
 from telegram import (
@@ -92,6 +91,9 @@ VOICE_MAP = {
     "vietnamese": {"edge": "vi-VN-HoaiMyNeural", "gtts": "vi", "flag": "🇻🇳", "code": "vi"},
     "georgian": {"edge": "ka-GE-EkaNeural", "gtts": "ka", "flag": "🇬🇪", "code": "ka"},
     "azerbaijani": {"edge": "az-AZ-BanuNeural", "gtts": "az", "flag": "🇦🇿", "code": "az"},
+    "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "code": "kk"},
+    "uzbek": {"edge": "uz-UZ-MadinaNeural", "gtts": "uz", "flag": "🇺🇿", "code": "uz"},
+    "tajik": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇹🇯", "code": "tg"},
 }
 
 def get_voice_info(lang_name):
@@ -101,25 +103,40 @@ def get_voice_info(lang_name):
             return v
     return VOICE_MAP["english"]
 
+def _translate_chunk(chunk, target):
+    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(chunk)}"
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=10) as response:
+        res_data = json.loads(response.read().decode('utf-8'))
+        translated = "".join([item[0] for item in res_data[0] if item[0]])
+        detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
+        return translated, detected_code
+
 def _sync_translation_logic(text, target_override=None):
     try:
         is_eng = all(ord(c) < 128 for c in text)
         target = target_override if target_override else ('ml' if is_eng else 'en')
         
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(text)}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        # Handle large passages safely by splitting into chunks
+        max_chunk = 1500
+        chunks = [text[i:i+max_chunk] for i in range(0, len(text), max_chunk)]
         
-        with urllib.request.urlopen(req, timeout=5) as response:
-            res_data = json.loads(response.read().decode('utf-8'))
-            translated = "".join([item[0] for item in res_data[0] if item[0]])
-            detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
+        translated_full = ""
+        detected_code = "unknown"
+        for chunk in chunks:
+            t_part, d_code = _translate_chunk(chunk, target)
+            translated_full += t_part + " "
+            if detected_code == "unknown":
+                detected_code = d_code
+
+        translated = translated_full.strip()
 
         if target == 'ml':
             translated = re.sub(r'\s+([അ-ഹ])', r'\1', translated)
 
-        phonetic_text = text
+        phonetic_text = text[:300]
         try:
-            url_phonetic = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text)}"
+            url_phonetic = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
             req_p = urllib.request.Request(url_phonetic, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req_p, timeout=5) as resp_p:
                 p_data = json.loads(resp_p.read().decode('utf-8'))
@@ -138,7 +155,8 @@ def _sync_translation_logic(text, target_override=None):
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
             'vi': 'Vietnamese', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
             'fr': 'French', 'es': 'Spanish', 'ru': 'Russian', 'en': 'English',
-            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish', 'ka': 'Georgian', 'az': 'Azerbaijani'
+            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish', 'ka': 'Georgian',
+            'az': 'Azerbaijani', 'kk': 'Kazakh', 'uz': 'Uzbek', 'tg': 'Tajik'
         }
         
         src_lang_name = lang_names.get(detected_code, detected_code.upper() if detected_code != "unknown" else detected_code.capitalize())
@@ -152,8 +170,8 @@ def _sync_translation_logic(text, target_override=None):
             "trg": target_lang_name,
             "trans": translated,
             "meaning": translated,
-            "native_p": text,
-            "latin_p": phonetic_text if phonetic_text != text else text,
+            "native_p": text[:300],
+            "latin_p": phonetic_text if phonetic_text != text[:300] else text[:300],
             "cultural_insight": f"Expression used in {src_lang_name} | Aura: {detected_mood}",
             "native_text": text,
             "target_code": target
@@ -444,20 +462,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
-    photo = update.message.photo[-1]
-    
-    context.user_data["pending_file_type"] = {"file_id": photo.file_id, "type": "photo"}
-    
-    keyboard = [
-        [InlineKeyboardButton("🇮🇳 Malayalam", callback_data="asklang_ml"), InlineKeyboardButton("🇩🇪 German", callback_data="asklang_de")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="asklang_en"), InlineKeyboardButton("🇮🇷 Persian", callback_data="asklang_fa")],
-        [InlineKeyboardButton("🇷🇺 Russian", callback_data="asklang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="asklang_fr")],
-    ]
-    await update.message.reply_text(
-        "🖼 <b>Image received!</b>\nPlease type the text content directly or send a PDF document for instant translation.",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text("⚠️ Photo translation is disabled. Please send text directly or upload a PDF document!", parse_mode="HTML")
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
@@ -489,33 +494,30 @@ async def asklang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     file_info = context.user_data.pop("pending_file_type")
-    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Processing document...", parse_mode="HTML")
+    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Processing large passage...", parse_mode="HTML")
     
     await process_media_file_direct(update.effective_chat.id, context, file_info["file_id"], file_info["type"], target_code, update)
 
 async def process_media_file_direct(chat_id, context, file_id, file_type, target_code, update_obj):
-    placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Processing document & translating...</i>", parse_mode="HTML")
+    placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Reading document & translating large passage...</i>", parse_mode="HTML")
     extracted_text = ""
 
     try:
         file = await context.bot.get_file(file_id)
-        if file_type == "photo":
-            extracted_text = "Please type the text directly into chat for instant translation."
-        else:
-            doc_path = f"doc_{chat_id}_{int(time.time())}.file"
-            await file.download_to_drive(doc_path)
-            with open(doc_path, 'rb') as f:
-                reader = PyPDF2.PdfReader(f)
-                for page in reader.pages:
-                    txt = page.extract_text()
-                    if txt: extracted_text += txt + "\n"
-            if os.path.exists(doc_path): os.remove(doc_path)
+        doc_path = f"doc_{chat_id}_{int(time.time())}.file"
+        await file.download_to_drive(doc_path)
+        with open(doc_path, 'rb') as f:
+            reader = PyPDF2.PdfReader(f)
+            for page in reader.pages:
+                txt = page.extract_text()
+                if txt: extracted_text += txt + "\n"
+        if os.path.exists(doc_path): os.remove(doc_path)
 
         extracted_text = extracted_text.strip()
         if not extracted_text:
             extracted_text = "Document contents successfully extracted."
 
-        extracted_text = extracted_text[:3500]
+        extracted_text = extracted_text[:10000]
         await placeholder.delete()
 
         user = update_obj.effective_user
@@ -525,14 +527,26 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
         src_lang = res.get("src", "English")
         trg_lang = res.get("trg", "Malayalam")
         
-        card_text = (
-            f"👤 <b>{user.first_name or 'Operator'}</b>\n"
-            f"────────────────────────\n"
-            f"🌐 <code>{src_lang.upper()}</code> ➔ 🌐 <code>{trg_lang.upper()}</code>\n"
-            f"────────────────────────\n\n"
-            f"💬 <b>{translation[:1500]}</b>"
-        )
-        await context.bot.send_message(chat_id=chat_id, text=card_text, parse_mode="HTML")
+        if len(translation) > 3500:
+            chunks = [translation[i:i+3500] for i in range(0, len(translation), 3500)]
+            for idx, chunk in enumerate(chunks):
+                card_text = (
+                    f"👤 <b>{user.first_name or 'Operator'}</b> (Part {idx+1})\n"
+                    f"────────────────────────\n"
+                    f"🌐 <code>{src_lang.upper()}</code> ➔ 🌐 <code>{trg_lang.upper()}</code>\n"
+                    f"────────────────────────\n\n"
+                    f"💬 <b>{chunk}</b>"
+                )
+                await context.bot.send_message(chat_id=chat_id, text=card_text, parse_mode="HTML")
+        else:
+            card_text = (
+                f"👤 <b>{user.first_name or 'Operator'}</b>\n"
+                f"────────────────────────\n"
+                f"🌐 <code>{src_lang.upper()}</code> ➔ 🌐 <code>{trg_lang.upper()}</code>\n"
+                f"────────────────────────\n\n"
+                f"💬 <b>{translation}</b>"
+            )
+            await context.bot.send_message(chat_id=chat_id, text=card_text, parse_mode="HTML")
 
     except Exception as e:
         await placeholder.edit_text(f"⚠️ Error processing file: {str(e)[:40]}")
@@ -548,7 +562,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await send_store_menu(update.effective_chat.id, context)
         return
 
-    placeholder = await update.message.reply_text("⚡ <i>Translating...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("⚡ <i>Translating passage...</i>", parse_mode="HTML")
     res = await execute_translation(text, target_override)
 
     if "error" in res:
