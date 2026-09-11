@@ -151,28 +151,17 @@ def _detect_language_name(text):
     else:
         return "English"
 
-def _translate_chunk(chunk, target):
-    encoded_q = urllib.parse.quote(chunk[:500])
-    url = f"https://api.mymemory.translated.net/get?q={encoded_q}&langpair=autodetect|{target}"
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(req, timeout=20) as response:
-                res_data = json.loads(response.read().decode('utf-8'))
-                match_data = res_data.get("responseData", {})
-                translated = match_data.get("translatedText", "")
-                
-                detected_lang = _detect_language_name(chunk)
-                if not translated:
-                    translated = chunk
-                return translated, detected_lang
-        except Exception as e:
-            if attempt < 2:
-                time.sleep(1)
-                continue
-            return chunk, _detect_language_name(chunk)
-    return chunk, _detect_language_name(chunk)
+def _mymemory_call(query_text, langpair):
+    try:
+        encoded_q = urllib.parse.quote(query_text[:500])
+        url = f"https://api.mymemory.translated.net/get?q={encoded_q}&langpair={langpair}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            match_data = res_data.get("responseData", {})
+            return match_data.get("translatedText", "")
+    except Exception:
+        return ""
 
 def _get_latin_phonetic(text, src_lang):
     try:
@@ -211,20 +200,19 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             target = context_data["user_lang"].get(str(user_id), 'en')
 
         text = str(text).strip()
-        translated, src_lang_name = _translate_chunk(text, target)
+        src_lang_name = _detect_language_name(text)
 
-        # Force English translation for meaning if target is not English
-        meaning_en = translated
-        try:
-            m_res, _ = _translate_chunk(text[:400], 'en')
-            if m_res:
-                meaning_en = m_res
-        except Exception:
-            pass
+        # 1. Main Translation based on user target or default group/personal language
+        translated = _mymemory_call(text, f"autodetect|{target}")
+        if not translated:
+            translated = text
+
+        # 2. Meaning in English (Forcefully translated to English)
+        meaning_en = _mymemory_call(text, "autodetect|en")
+        if not meaning_en:
+            meaning_en = translated if target == 'en' else text
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name)
-        if not translated:
-            return {"error": "Translation service is busy. Please try again."}
 
         lang_names = {
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
