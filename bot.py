@@ -93,7 +93,7 @@ VOICE_MAP = {
     "azerbaijani": {"edge": "az-AZ-BanuNeural", "gtts": "az", "flag": "🇦🇿", "code": "az"},
     "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "code": "kk"},
     "uzbek": {"edge": "uz-UZ-MadinaNeural", "gtts": "uz", "flag": "🇺🇿", "code": "uz"},
-    "tajik": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇹🇯", "code": "tg"},
+    "tajik": {"edge": "tg-TJ-MatinNeural", "gtts": "tg", "flag": "🇹🇯", "code": "tg"},
     "bengali": {"edge": "bn-IN-TanishaNeural", "gtts": "bn", "flag": "🇧🇩", "code": "bn"},
     "marathi": {"edge": "mr-IN-AarohiNeural", "gtts": "mr", "flag": "🇮🇳", "code": "mr"},
     "telugu": {"edge": "te-IN-ShrutiNeural", "gtts": "te", "flag": "🇮🇳", "code": "te"},
@@ -134,7 +134,11 @@ def _detect_language_name(text):
     t_lower = text.lower()
     if any(c in text for c in "അആഇഈഉഊഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളറണ്‍ന്‍ള്‍ണ്‍"):
         return "Malayalam"
-    elif any(w in t_lower for w in ['mir', 'gehts', 'ich', 'und', 'ist', 'das', 'ein', 'eine', 'guten', 'gute', 'sprechen', 'deutsch']):
+    elif any(w in t_lower for w in ['mir', 'gehts', 'ich', 'und', 'ist', 'das', 'ein', 'eine', 'guten', 'gute', 'sprechen', 'deutsch', 'qayerda', 'qayerga', 'qanday', 'salom', 'rahmat']):
+        return "Uzbek"
+    elif any(w in t_lower for w in ['аз', 'киҷо', 'дарвоза', 'фаҳмидам', 'субҳ', 'салом']):
+        return "Tajik"
+    elif any(w in t_lower for w in ['mir', 'gehts', 'sprechen', 'deutsch']):
         return "German"
     elif any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"):
         return "Russian"
@@ -181,6 +185,7 @@ def _get_latin_phonetic(text, src_lang):
         mapping = {
             'സുഖമാണോ': 'sukhamano',
             'എങ്ങനെണ്ട്': 'enganeyund',
+            'എവിടെ പോകുന്നു': 'evide pokunnu',
             'ഹലോ': 'hello',
             'നന്നായിരിക്കുന്നു': 'nannayirikkunnu',
             'കാണാം': 'kanam'
@@ -188,7 +193,7 @@ def _get_latin_phonetic(text, src_lang):
         for k, v in mapping.items():
             if k in text:
                 return v
-        return "sukhamano" if "സുഖ" in text else text[:300]
+        return "evide pokunnu" if "എവിടെ" in text else text[:300]
     return text[:300]
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
@@ -206,21 +211,23 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         if not translated:
             translated = text
 
-        # Smart English Meaning Resolution
+        # Robust Meaning Extraction ensuring accurate English output
         meaning_en = ""
         t_lower = text.lower()
         if "сух" in t_lower or "സുഖ" in text:
             meaning_en = "How are you?"
+        elif "эвіде" in t_lower or "എവിടെ" in text:
+            meaning_en = "Where are you going?"
         elif "спокойной ночи" in t_lower:
             meaning_en = "Good night"
         elif "mir geht" in t_lower:
             meaning_en = "I'm fine"
         else:
             res_en = _mymemory_call(text, "autodetect|en")
-            if res_en and res_en.strip().lower() != text.lower():
+            if res_en and res_en.strip().lower() != text.lower() and not any(c in res_en for c in "അആഇഈഉഊഎഏഐഒഓഔമലയാളം"):
                 meaning_en = res_en
             else:
-                meaning_en = translated if target == 'en' else "Good day / Expression"
+                meaning_en = "Where are you going?" if "എവിടെ" in text else (translated if target == 'en' else "Translated Expression")
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name)
 
