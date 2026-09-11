@@ -129,24 +129,6 @@ def get_voice_info(lang_name):
             return v
     return VOICE_MAP["english"]
 
-def _smart_detect_language(text, api_code):
-    t_lower = text.lower()
-    # Script & Keyword overrides for perfect accuracy
-    if any(c in text for c in "അആഇഈഉഊഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളറണ്‍ന്‍ള്‍ണ്‍"):
-        return 'ml'
-    if any(w in t_lower for w in ['mir', 'gehts', 'ich', 'und', 'ist', 'das', 'ein', 'eine', 'guten', 'gute', 'sprechen', 'deutsch']):
-        return 'de'
-    if any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"):
-        return 'ru'
-    if any(w in t_lower for w in ['bonjour', 'merci', 'comment', 'vous', 'etes', 'oui', 'non']):
-        return 'fr'
-    if any(w in t_lower for w in ['hola', 'gracias', 'como', 'estas', 'buenos', 'bien']):
-        return 'es'
-    
-    if api_code and api_code != "unknown":
-        return api_code
-    return 'en'
-
 def _translate_chunk(chunk, target):
     url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(chunk)}"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
@@ -156,8 +138,7 @@ def _translate_chunk(chunk, target):
             with urllib.request.urlopen(req, timeout=25) as response:
                 res_data = json.loads(response.read().decode('utf-8'))
                 translated = "".join([item[0] for item in res_data[0] if item[0]])
-                raw_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
-                detected_code = _smart_detect_language(chunk, raw_code)
+                detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
                 return translated, detected_code
         except Exception as e:
             if attempt < 3:
@@ -216,6 +197,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             except Exception:
                 pass
 
+        # Robust English Phonetics generation via Google Translate dt=rm parameter
         phonetic_text = text[:300]
         try:
             url_phonetic = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
