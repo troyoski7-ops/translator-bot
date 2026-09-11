@@ -60,6 +60,7 @@ STANDARD_THEMES = {
 }
 
 PREMIUM_THEMES = {
+    "vip_gold": {"label": "👑 [VIP] Royal Imperial Gold", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "vip": True},
     "vip_cyber": {"label": "⚡ [VIP] Cyberpunk Neon Matrix", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBERPUNK VIP ⚡", "vip": True},
     "vip_diamond": {"label": "💎 [VIP] Holographic Diamond", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "vip": True},
     "vip_quantum": {"label": "🌌 [VIP] Quantum Astral Core", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "🌌 QUANTUM LEGEND 🌌", "vip": True}
@@ -131,7 +132,7 @@ def get_voice_info(lang_name):
 def _translate_chunk(chunk, target):
     url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(chunk)}"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=15) as response:
+    with urllib.request.urlopen(req, timeout=25) as response:
         res_data = json.loads(response.read().decode('utf-8'))
         translated = "".join([item[0] for item in res_data[0] if item[0]])
         detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
@@ -145,35 +146,43 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         elif not is_group and user_id and context_data and "user_lang" in context_data:
             target = context_data["user_lang"].get(str(user_id), 'en')
 
-        max_chunk = 400
-        words = text.split()
+        paragraphs = text.split('\n')
         chunks = []
-        current_chunk = ""
-        for word in words:
-            if len(current_chunk) + len(word) < max_chunk:
-                current_chunk += word + " "
-            else:
-                chunks.append(current_chunk.strip())
-                current_chunk = word + " "
-        if current_chunk:
-            chunks.append(current_chunk.strip())
+        for p in paragraphs:
+            if not p.strip():
+                continue
+            words = p.split()
+            curr = ""
+            for w in words:
+                if len(curr) + len(w) < 400:
+                    curr += w + " "
+                else:
+                    chunks.append(curr.strip())
+                    curr = w + " "
+            if curr:
+                chunks.append(curr.strip())
         if not chunks:
             chunks = [text]
-        
+
         translated_full = ""
         detected_code = "unknown"
         for chunk in chunks:
-            t_part, d_code = _translate_chunk(chunk, target)
-            translated_full += t_part + " "
-            if detected_code == "unknown":
-                detected_code = d_code
+            try:
+                t_part, d_code = _translate_chunk(chunk, target)
+                translated_full += t_part + " "
+                if detected_code == "unknown":
+                    detected_code = d_code
+            except Exception:
+                pass
 
         translated = translated_full.strip()
+        if not translated:
+            translated, detected_code = _translate_chunk(text[:400], target)
 
         meaning_en = translated
         if target != 'en':
             try:
-                meaning_en, _ = _translate_chunk(text[:500], 'en')
+                meaning_en, _ = _translate_chunk(text[:600], 'en')
             except Exception:
                 pass
 
