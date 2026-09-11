@@ -60,10 +60,10 @@ STANDARD_THEMES = {
 }
 
 PREMIUM_THEMES = {
-    "vip_gold": {"label": "👑 Royal Imperial Gold", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "vip": True},
-    "vip_cyber": {"label": "🐉 Cyber Tokyo Neon", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBER MATRIX VIP ⚡", "vip": True},
-    "vip_matrix": {"label": "⚡ Quantum Astral Core", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "✨ ASTRAL HORIZON ✨", "vip": True},
-    "vip_sound": {"label": "🎧 Hologram Soundwaves", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "vip": True}
+    "vip_gold": {"label": "🔒 👑 Royal Imperial Gold [VIP]", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "vip": True},
+    "vip_cyber": {"label": "🔒 🐉 Cyber Tokyo Neon [VIP]", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBER MATRIX VIP ⚡", "vip": True},
+    "vip_matrix": {"label": "🔒 ⚡ Quantum Astral Core [VIP]", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "✨ ASTRAL HORIZON ✨", "vip": True},
+    "vip_sound": {"label": "🔒 🎧 Hologram Soundwaves [VIP]", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "vip": True}
 }
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
@@ -114,17 +114,17 @@ def _translate_chunk(chunk, target):
 
 def _sync_translation_logic(text, chat_id=None, context_data=None):
     try:
-        is_malayalam = bool(re.search(r'[\u0d00-\u0d7f]', text))
+        is_english = all(ord(c) < 128 for c in text)
         
         if chat_id and context_data and "chat_target_lang" in context_data:
             target = context_data["chat_target_lang"].get(str(chat_id), 'ru')
         else:
             target = 'ru'
         
-        if is_malayalam:
+        if is_english:
             target = chat_id and context_data and context_data.get("chat_target_lang", {}).get(str(chat_id), 'ru') or 'ru'
         else:
-            target = 'ml'
+            target = 'en'
 
         max_chunk = 1500
         chunks = [text[i:i+max_chunk] for i in range(0, len(text), max_chunk)]
@@ -138,9 +138,6 @@ def _sync_translation_logic(text, chat_id=None, context_data=None):
                 detected_code = d_code
 
         translated = translated_full.strip()
-
-        if target == 'ml':
-            translated = re.sub(r'\s+([അ-ഹ])', r'\1', translated)
 
         phonetic_text = text[:300]
         try:
@@ -278,8 +275,7 @@ async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for key, item in STANDARD_THEMES.items():
         keyboard.append([InlineKeyboardButton(item["label"], callback_data=f"settheme_{key}")])
     for key, item in PREMIUM_THEMES.items():
-        label = f"✨ {item['label']}" if is_vip else f"🔒 {item['label']} [VIP]"
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"settheme_{key}")])
+        keyboard.append([InlineKeyboardButton(item["label"], callback_data=f"settheme_{key}")])
     await update.message.reply_text("🎨 <b>Select Holographic Theme:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -363,8 +359,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal & Group Chat (Automatic Two-Way):</b>\n"
-        "• You type in Malayalam ➔ Partner gets Russian/Target language automatically.\n"
-        "• Partner types in Target language ➔ You get Malayalam automatically.\n"
+        "• You type in English ➔ Partner gets Russian/Target language automatically.\n"
+        "• Partner types in Target language ➔ You get English automatically.\n"
         "• Use <b>/settings</b> to change partner language anytime!\n\n"
         "<b>Commands:</b>\n"
         "⚙️ /settings • Two-Way Language Settings\n"
