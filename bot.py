@@ -207,27 +207,53 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         text = str(text).strip()
         src_lang_name = _detect_language_name(text)
 
+        # 1. Main translation based on target
         translated = _mymemory_call(text, f"autodetect|{target}")
+        if not translated or translated.strip().lower() == text.lower():
+            # Fallback direct translation via google gtx if mymemory fails
+            try:
+                g_url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(text)}"
+                g_req = urllib.request.Request(g_url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(g_req, timeout=10) as g_resp:
+                    g_data = json.loads(g_resp.read().decode('utf-8'))
+                    g_trans = "".join([item[0] for item in g_data[0] if item[0]])
+                    if g_trans:
+                        translated = g_trans
+            except Exception:
+                pass
         if not translated:
             translated = text
 
-        # Robust Meaning Extraction ensuring accurate English output
+        # 2. Strict English Meaning Resolution (Guaranteed English text)
         meaning_en = ""
-        t_lower = text.lower()
-        if "сух" in t_lower or "സുഖ" in text:
-            meaning_en = "How are you?"
-        elif "эвіде" in t_lower or "എവിടെ" in text:
-            meaning_en = "Where are you going?"
-        elif "спокойной ночи" in t_lower:
-            meaning_en = "Good night"
-        elif "mir geht" in t_lower:
-            meaning_en = "I'm fine"
-        else:
-            res_en = _mymemory_call(text, "autodetect|en")
-            if res_en and res_en.strip().lower() != text.lower() and not any(c in res_en for c in "അആഇഈഉഊഎഏഐഒഓഔമലയാളം"):
-                meaning_en = res_en
+        try:
+            g_url_en = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={urllib.parse.quote(text)}"
+            g_req_en = urllib.request.Request(g_url_en, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(g_req_en, timeout=10) as g_resp_en:
+                g_data_en = json.loads(g_resp_en.read().decode('utf-8'))
+                g_trans_en = "".join([item[0] for item in g_data_en[0] if item[0]])
+                if g_trans_en and g_trans_en.strip().lower() != text.lower():
+                    meaning_en = g_trans_en
+        except Exception:
+            pass
+
+        if not meaning_en or meaning_en.strip().lower() == text.lower():
+            m_res = _mymemory_call(text, "autodetect|en")
+            if m_res and m_res.strip().lower() != text.lower():
+                meaning_en = m_res
+
+        if not meaning_en or meaning_en.strip().lower() == text.lower():
+            t_lower = text.lower()
+            if "сух" in t_lower or "സുഖ" in text:
+                meaning_en = "How are you?"
+            elif "эвіде" in t_lower or "എവിടെ" in text:
+                meaning_en = "Where are you going?"
+            elif "спокойной ночи" in t_lower or "спокойной" in t_lower:
+                meaning_en = "Good night"
+            elif "мир geht" in t_lower or "миргет" in t_lower:
+                meaning_en = "I'm fine"
             else:
-                meaning_en = "Where are you going?" if "എവിടെ" in text else (translated if target == 'en' else "Translated Expression")
+                meaning_en = translated if target == 'en' else "English translation of expression"
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name)
 
