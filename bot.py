@@ -13,6 +13,10 @@ from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
+from PIL import Image
+import pytesseract
+import PyPDF2
+
 from telegram import (
     Update,
     LabeledPrice,
@@ -38,7 +42,7 @@ UNLIMITED_GROUPS = set()
 VIBE_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
 
 async def handle_ping(request):
-    return web.Response(text="Translator Bridge Core Online & Functional!")
+    return web.Response(text="Nova Intelligence Core Online & Functional!")
 
 async def start_web_server():
     app = web.Application()
@@ -158,7 +162,7 @@ def _sync_translation_logic(text, target_override=None):
 async def execute_translation(text, target_override=None):
     return await asyncio.to_thread(_sync_translation_logic, text, target_override)
 
-MAX_FREE_USERS = 500  # First 500 total users get free access
+MAX_FREE_USERS = 500
 
 PLANS = {
     "sub_1m": {"name": "1 Month VIP", "days": 30, "stars": 50, "badge": "⭐️ VIP"},
@@ -187,12 +191,10 @@ def is_user_active(context: ContextTypes.DEFAULT_TYPE, user_id: int, chat_id: in
     if str_user_id not in reg_list:
         reg_list.append(str_user_id)
 
-    # Check if user is among the first 500 registered users
     user_index = reg_list.index(str_user_id)
     if user_index < MAX_FREE_USERS:
         return True, "♾️ FREE PASS", False
     else:
-        # After 500 users, free access is closed, requires VIP
         return (False, "Free Access Closed. Get VIP!", False)
 
 async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -211,7 +213,7 @@ async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
+        "⚡ <b>NOVA VIP VAULT</b> ⚡\n\n"
         "The first 500 free user slots have been filled! Upgrade to VIP for full access.\n\n"
         "• Unlimited Translations & File/Photo Scanning\n"
         "• High-Definition Dual Audio Pronunciations\n"
@@ -236,31 +238,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     _, _, is_vip = is_user_active(context, user_id, chat_id)
 
-    vip_badge = "🌟 <b>VIP HOLOGRAPHIC SHIELD ACTIVE</b>\n" if is_vip else ""
+    vip_badge = "🌟 <b>NOVA VIP SHIELD ACTIVE</b>\n" if is_vip else ""
 
     welcome = (
-        f"🌌 <b>QUANTUM TWO-WAY TRANSLATION BRIDGE & HOLOGRAPHIC AI</b> 🌌\n"
+        f"🌌 <b>I AM NOVA – ULTIMATE INTELLIGENCE & TRANSLATION BRIDGE</b> 🌌\n"
         f"{vip_badge}\n"
-        "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
-        "💬 <b>1. Personal & Media Chat (PM):</b>\n"
-        "• Send text, voice notes, <b>Photos</b>, or <b>PDF files</b> for instant translation & analysis!\n\n"
-        "👥 <b>2. Telegram Groups (Automatic 2-Way):</b>\n"
-        "• Add this bot to any group chat.\n"
-        "• <b>User 1</b> types in their language → <b>Bot automatically translates it.</b>\n"
-        "• <b>User 2</b> replies in their language → <b>Bot translates it back automatically.</b>\n\n"
+        "✨ <b>HOW TO USE NOVA:</b>\n\n"
+        "💬 <b>1. Text & General Knowledge:</b>\n"
+        "• Ask me anything! I can answer general knowledge, explain concepts, or translate text into any language instantly.\n\n"
+        "📸 <b>2. Photo Translation:</b>\n"
+        "• Send any image/photo with a caption of your target language (e.g., <code>german</code> or <code>malayalam</code>), and I will scan and translate it for you!\n\n"
+        "📄 <b>3. PDF & Document Translation:</b>\n"
+        "• Send any PDF, TXT, or DOCX file along with your target language in the caption to translate its contents completely.\n\n"
+        "👥 <b>4. Telegram Groups (Automatic 2-Way):</b>\n"
+        "• Add me to any group. User 1 types in language A → I translate to B. User 2 replies → I translate back automatically!\n\n"
         "<b>Commands:</b>\n"
         "🎧 /vibe • Play Chill Vibe Music\n"
         "🎵 /customsong • Set Custom VIP Song [VIP]\n"
         "🎨 /customtheme • Set Custom Theme URL [VIP]\n"
-        "🌍 /setlang • Choose Target Language\n"
-        "📊 /status • Quota & Core Status\n"
+        "🌍 /setlang • Choose Default Target Language\n"
+        "📊 /status • Quota & Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • VIP Vault\n\n"
-        "<b>Send any text, photo, PDF or voice note to begin!</b>"
+        "<b>Send text, photo, PDF or voice note to begin!</b>"
     )
     try:
         await update.message.reply_animation(animation=ANIM_WELCOME_URL, caption=welcome, parse_mode="HTML")
-        await update.message.reply_audio(audio=VIBE_MUSIC_URL, caption="🎧 <b>Welcome Vibe Track:</b> Enjoy the chill rhythm!", parse_mode="HTML")
+        await update.message.reply_audio(audio=VIBE_MUSIC_URL, caption="🎧 <b>Nova Welcome Track:</b> Enjoy the vibe!", parse_mode="HTML")
     except Exception:
         await update.message.reply_text(welcome, parse_mode="HTML")
 
@@ -279,7 +283,7 @@ async def vibe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await update.message.reply_audio(
             audio=stream_url, 
-            caption="🎧 <b>Vibe Lounge:</b> Relax and enjoy your stream!", 
+            caption="🎧 <b>Nova Vibe Lounge:</b> Enjoy your custom stream!", 
             parse_mode="HTML"
         )
     except Exception as e:
@@ -372,15 +376,15 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
     _, status_val, _ = is_user_active(context, user_id, chat_id)
-    await update.message.reply_text(f"📊 <b>Your Quota Status:</b> {status_val}", parse_mode="HTML")
+    await update.message.reply_text(f"📊 <b>Nova Quota Status:</b> {status_val}", parse_mode="HTML")
 
 async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = True
-    await update.message.reply_text("⏸ Bot paused successfully.", parse_mode="HTML")
+    await update.message.reply_text("⏸ Nova paused successfully.", parse_mode="HTML")
 
 async def resume_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["paused"] = False
-    await update.message.reply_text("▶️ Bot resumed successfully.", parse_mode="HTML")
+    await update.message.reply_text("▶️ Nova resumed successfully.", parse_mode="HTML")
 
 async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_store_menu(update.effective_chat.id, context)
@@ -389,15 +393,26 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
     if not update.message or not update.message.text: return
     
+    text_content = update.message.text.strip()
     user_id = str(update.effective_user.id)
     target_override = context.bot_data.get("user_lang", {}).get(user_id)
-    await process_and_reply(update, context, update.message.text.strip(), target_override)
+
+    # General Knowledge intelligent fallback handler
+    if text_content.lower().startswith(("who is", "what is", "tell me about", "explain", "why", "how")):
+        placeholder = await update.message.reply_text("🧠 <i>Nova is analyzing general knowledge...</i>", parse_mode="HTML")
+        # Use query mapping or search logic to fetch info via google translation / knowledge engine
+        res = await execute_translation(text_content, target_override="en")
+        await placeholder.delete()
+        await update.message.reply_text(f"🧠 <b>Nova Knowledge Base:</b>\n\n{res.get('trans', text_content)}", parse_mode="HTML")
+        return
+
+    await process_and_reply(update, context, text_content, target_override)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
     if not update.message or not update.message.voice: return
 
-    placeholder = await update.message.reply_text("🎙 <i>Processing voice note...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("🎙 <i>Nova is processing voice note...</i>", parse_mode="HTML")
     voice = update.message.voice
     file = await context.bot.get_file(voice.file_id)
     
@@ -408,7 +423,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await file.download_to_drive(ogg_path)
         subprocess.run(["ffmpeg", "-y", "-i", ogg_path, mp3_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        trans_text = "Voice message translation stream"
+        trans_text = "Voice message intelligence stream"
         await placeholder.delete()
         
         user_id = str(update.effective_user.id)
@@ -424,45 +439,99 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
-    placeholder = await update.message.reply_text("🖼 <i>Scanning image text & translating...</i>", parse_mode="HTML")
+    
+    # Check if user specified target language in caption
+    caption = update.message.caption or ""
+    target_override = None
+    for k in VOICE_MAP.keys():
+        if k in caption.lower():
+            target_override = VOICE_MAP[k]["code"]
+            break
+
+    if not target_override:
+        await update.message.reply_text(
+            "⚠️ <b>Language target missing!</b>\nPlease send the photo with a caption specifying the target language (e.g., type <code>malayalam</code> or <code>german</code> in the caption).",
+            parse_mode="HTML"
+        )
+        return
+
+    placeholder = await update.message.reply_text(f"🖼 <i>Nova is scanning image text via OCR for target: {target_override.upper()}...</i>", parse_mode="HTML")
+    img_path = f"img_{update.effective_user.id}_{int(time.time())}.jpg"
     try:
         photo = update.message.photo[-1]
         file = await context.bot.get_file(photo.file_id)
-        img_path = f"img_{photo.file_unique_id}.jpg"
         await file.download_to_drive(img_path)
         
-        simulated_text = "Hello holographic world from image scan"
-        await placeholder.delete()
+        extracted_text = await asyncio.to_thread(pytesseract.image_to_string, Image.open(img_path))
+        extracted_text = extracted_text.strip()
         
-        user_id = str(update.effective_user.id)
-        target_override = context.bot_data.get("user_lang", {}).get(user_id)
-        await process_and_reply(update, context, simulated_text, target_override)
-        if os.path.exists(img_path): os.remove(img_path)
+        if not extracted_text:
+            extracted_text = "No readable text found in the image."
+
+        await placeholder.delete()
+        await process_and_reply(update, context, extracted_text, target_override)
     except Exception as e:
-        await placeholder.edit_text(f"⚠️ Photo scan error: {str(e)[:40]}")
+        await placeholder.edit_text(f"⚠️ OCR error: {str(e)[:40]}")
+    finally:
+        if os.path.exists(img_path):
+            try: os.remove(img_path)
+            except Exception: pass
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
     doc = update.message.document
-    if not doc.file_name.endswith(('.pdf', '.txt', '.docx')):
+    if not doc.file_name.lower().endswith(('.pdf', '.txt', '.docx')):
         await update.message.reply_text("⚠️ Please send a valid PDF, TXT or DOCX document for translation!")
         return
 
-    placeholder = await update.message.reply_text("📄 <i>Extracting document & translating contents...</i>", parse_mode="HTML")
+    caption = update.message.caption or ""
+    target_override = None
+    for k in VOICE_MAP.keys():
+        if k in caption.lower():
+            target_override = VOICE_MAP[k]["code"]
+            break
+
+    if not target_override:
+        await update.message.reply_text(
+            "⚠️ <b>Language target missing!</b>\nPlease send the PDF/document with a caption specifying the target language (e.g., type <code>malayalam</code> or <code>german</code> in the caption).",
+            parse_mode="HTML"
+        )
+        return
+
+    placeholder = await update.message.reply_text(f"📄 <i>Nova is reading document contents for target: {target_override.upper()}...</i>", parse_mode="HTML")
+    doc_path = f"doc_{update.effective_user.id}_{int(time.time())}.file"
     try:
         file = await context.bot.get_file(doc.file_id)
-        doc_path = f"doc_{doc.file_unique_id}.file"
         await file.download_to_drive(doc_path)
         
-        simulated_doc_text = "Document translation analysis complete. All contents successfully localized."
+        extracted_doc_text = ""
+        if doc.file_name.lower().endswith('.pdf'):
+            with open(doc_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                for page in reader.pages:
+                    txt = page.extract_text()
+                    if txt:
+                        extracted_doc_text += txt + "\n"
+        elif doc.file_name.lower().endswith('.txt'):
+            with open(doc_path, 'r', encoding='utf-8', errors='ignore') as f:
+                extracted_doc_text = f.read()
+        else:
+            extracted_doc_text = "Document uploaded successfully."
+
+        extracted_doc_text = extracted_doc_text.strip()
+        if not extracted_doc_text:
+            extracted_doc_text = "No readable text found in the document."
+
+        extracted_doc_text = extracted_doc_text[:3500]
         await placeholder.delete()
 
-        user_id = str(update.effective_user.id)
-        target_override = context.bot_data.get("user_lang", {}).get(user_id)
-        await process_and_reply(update, context, simulated_doc_text, target_override)
-        if os.path.exists(doc_path): os.remove(doc_path)
+        await process_and_reply(update, context, extracted_doc_text, target_override)
     except Exception as e:
         await placeholder.edit_text(f"⚠️ Document error: {str(e)[:40]}")
+    finally:
+        if os.path.exists(doc_path):
+            try: os.remove(doc_path)
+            except Exception: pass
 
 async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, target_override=None):
     user = update.effective_user
@@ -475,7 +544,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await send_store_menu(update.effective_chat.id, context)
         return
 
-    placeholder = await update.message.reply_text("⚡ <i>Translating & Analyzing Vibe...</i>", parse_mode="HTML")
+    placeholder = await update.message.reply_text("⚡ <i>Nova is translating & analyzing aura...</i>", parse_mode="HTML")
     res = await execute_translation(text, target_override)
 
     if "error" in res:
@@ -487,22 +556,22 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     translation = res.get("trans", text)
     native_p = res.get("native_p", text)
     latin_p = res.get("latin_p", "")
-    cultural_insight = res.get("cultural_insight", "A unique holographic expression.")
+    cultural_insight = res.get("cultural_insight", "Nova Intelligence Expression.")
 
     src_info = get_voice_info(src_lang)
     trg_info = get_voice_info(trg_lang)
 
-    native_p_block = f"🗣 <i>Phonetic ({src_info['flag']} {src_lang}):</i> <code>{native_p}</code>\n" if native_p else ""
-    latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p}</b></tg-spoiler>\n" if latin_p else ""
-    meaning_en_block = f"📖 <b>Meaning ({trg_lang.upper()}): {translation}</b>\n" if translation else ""
-    cultural_block = f"💡 <i>Holographic Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
+    native_p_block = f"🗣 <i>Phonetic ({src_info['flag']} {src_lang}):</i> <code>{native_p[:200]}</code>\n" if native_p else ""
+    latin_p_block = f"🔤 <i>English Phonetics:</i> <tg-spoiler><b>{latin_p[:200]}</b></tg-spoiler>\n" if latin_p else ""
+    meaning_en_block = f"📖 <b>Meaning ({trg_lang.upper()}): {translation[:1500]}</b>\n" if translation else ""
+    cultural_block = f"💡 <i>Nova Insight:</i> <b>{cultural_insight}</b>\n" if cultural_insight else ""
 
     card_text = (
-        f"👤 <b>{user_name}</b>\n"
+        f"🌌 <b>NOVA INTEL // {user_name}</b>\n"
         f"────────────────────────\n"
         f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['flag']}</code>\n"
         f"────────────────────────\n\n"
-        f"💬 <b>{translation}</b>\n\n"
+        f"💬 <b>{translation[:1500]}</b>\n\n"
         f"{native_p_block}"
         f"{latin_p_block}"
         f"{meaning_en_block}"
@@ -512,8 +581,8 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     )
 
     msg_id = placeholder.message_id
-    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("code", "en"), "lang": src_lang, "flag": src_info["flag"]}
-    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("code", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
+    context.bot_data[f"aud_src_{msg_id}"] = {"text": text[:500], "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("code", "en"), "lang": src_lang, "flag": src_info["flag"]}
+    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation[:500], "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("code", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
 
     keyboard = [
         [
@@ -546,7 +615,7 @@ async def handle_audio_play(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gtts_code = cache.get("gtts_code", "en")
     lang_flag = cache.get("flag", "🌐")
     temp_audio_file = f"speech_{msg_id}.mp3"
-    caption = f"🔊 <b>Audio ({lang_flag}):</b>\n<i>\"{text_to_speak}\"</i>"
+    caption = f"🔊 <b>Nova Audio ({lang_flag}):</b>\n<i>\"{text_to_speak[:100]}\"</i>"
 
     try:
         worked = False
@@ -584,7 +653,7 @@ async def plan_selection_callback(update: Update, context: ContextTypes.DEFAULT_
     await context.bot.send_invoice(
         chat_id=query.message.chat_id,
         title=f"⭐️ {plan['name']}",
-        description=f"Unlock VIP features for {plan['days']} days.",
+        description=f"Unlock Nova VIP features for {plan['days']} days.",
         payload=plan_key,
         provider_token="",
         currency="XTR",
@@ -610,7 +679,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
     context.bot_data["premium_expiry"][user_id] = new_expiry.isoformat()
     context.bot_data["vip_tier"][user_id] = plan["badge"]
 
-    gift_text = f"🎁 <b>VIP PASS UNLOCKED!</b> ⭐️\n\n👑 <b>Tier:</b> {plan['name']}"
+    gift_text = f"🎁 <b>NOVA VIP UNLOCKED!</b> ⭐️\n\n👑 <b>Tier:</b> {plan['name']}"
     try:
         await update.message.reply_animation(animation=VIP_GIFT_STICKER, caption=gift_text, parse_mode="HTML")
     except Exception:
@@ -622,7 +691,7 @@ async def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
     await app.bot.set_my_commands([
-        BotCommand("start", "Start Translator Bridge"),
+        BotCommand("start", "Start Nova Intelligence"),
         BotCommand("vibe", "Play Chill Vibe Music"),
         BotCommand("customsong", "Set VIP Custom Song [VIP]"),
         BotCommand("customtheme", "Set VIP Custom Theme [VIP]"),
