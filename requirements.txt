@@ -2,3 +2,7 @@ python-telegram-bot
 gtts
 edge-tts
 aiohttp
+pillow
+pytesseract
+PyPDF2
+
