@@ -407,7 +407,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text_content = update.message.text.strip()
     target_override = context.bot_data.get("user_lang", {}).get(user_id)
-
     await process_and_reply(update, context, text_content, target_override)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -497,7 +496,8 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
     try:
         file = await context.bot.get_file(file_id)
         if file_type == "photo":
-            extracted_text = "Photo document received and processed for translation."
+            # Direct photo handling text description since pure python has no OCR bin
+            extracted_text = "Photo document received. Please type the text or send a text document for full translation."
         else:
             doc_path = f"doc_{chat_id}_{int(time.time())}.file"
             await file.download_to_drive(doc_path)
