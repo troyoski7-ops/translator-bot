@@ -132,11 +132,21 @@ def get_voice_info(lang_name):
 def _translate_chunk(chunk, target):
     url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(chunk)}"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=25) as response:
-        res_data = json.loads(response.read().decode('utf-8'))
-        translated = "".join([item[0] for item in res_data[0] if item[0]])
-        detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
-        return translated, detected_code
+    
+    # Retry mechanism for HTTP 429 Too Many Requests
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=25) as response:
+                res_data = json.loads(response.read().decode('utf-8'))
+                translated = "".join([item[0] for item in res_data[0] if item[0]])
+                detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
+                return translated, detected_code
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise e
+    return "", "unknown"
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     try:
@@ -146,7 +156,6 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         elif not is_group and user_id and context_data and "user_lang" in context_data:
             target = context_data["user_lang"].get(str(user_id), 'en')
 
-        # Clean text to prevent formatting issues
         text = str(text).strip()
         paragraphs = text.split('\n')
         chunks = []
@@ -174,6 +183,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
                 translated_full += t_part + " "
                 if detected_code == "unknown":
                     detected_code = d_code
+                time.sleep(0.3) # Small pacing delay to prevent 429
             except Exception:
                 pass
 
@@ -830,7 +840,7 @@ async def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
