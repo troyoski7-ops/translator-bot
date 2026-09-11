@@ -146,6 +146,8 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         elif not is_group and user_id and context_data and "user_lang" in context_data:
             target = context_data["user_lang"].get(str(user_id), 'en')
 
+        # Clean text to prevent formatting issues
+        text = str(text).strip()
         paragraphs = text.split('\n')
         chunks = []
         for p in paragraphs:
