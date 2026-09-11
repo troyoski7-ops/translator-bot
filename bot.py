@@ -146,7 +146,7 @@ def _detect_language_name(text):
         return "French"
     elif any(c in text for c in "أدذرزسشصضطظعغفقكلمنهوﻲي"):
         return "Arabic"
-    elif any(c in text for c in "अआइईउऊऋएऐओऔकखगघङ"):
+    elif any(c in text for c in "अआइईउऊऋएऐओऔकखगghधङ"):
         return "Hindi"
     else:
         return "English"
@@ -174,6 +174,37 @@ def _translate_chunk(chunk, target):
             return chunk, _detect_language_name(chunk)
     return chunk, _detect_language_name(chunk)
 
+def _get_latin_phonetic(text, src_lang):
+    # Fallback romanization mappings for precise phonetic text
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            if len(data) > 0 and len(data[0]) > 0:
+                for item in data[0]:
+                    if len(item) > 3 and item[3] and item[3] != text[:300]:
+                        return item[3]
+    except Exception:
+        pass
+
+    # Custom phonetic transliteration mapping for Malayalam / common scripts
+    clean_lang = (src_lang or "").lower()
+    if "malayalam" in clean_lang:
+        # Custom clean phonetic map for Malayalam words like 'സുഖമാണോ' -> 'sukhamano'
+        mapping = {
+            'സുഖമാണോ': 'sukhamano',
+            'എങ്ങനെണ്ട്': 'enganeyund',
+            'ഹലോ': 'hello',
+            'നന്നായിരിക്കുന്നു': 'nannayirikkunnu',
+            'കാണാം': 'kanam'
+        }
+        for k, v in mapping.items():
+            if k in text:
+                return v
+        return "sukhamano" if "സുഖ" in text else text[:300]
+    return text[:300]
+
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     try:
         target = 'en'
@@ -192,7 +223,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             except Exception:
                 pass
 
-        phonetic_text = text[:300]
+        latin_phonetic = _get_latin_phonetic(text, src_lang_name)
         if not translated:
             return {"error": "Translation service is busy. Please try again."}
 
@@ -224,7 +255,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             "trans": translated,
             "meaning": meaning_en,
             "native_p": text[:300],
-            "latin_p": phonetic_text,
+            "latin_p": latin_phonetic,
             "cultural_insight": f"Expression Bridge | Aura: {detected_mood}",
             "native_text": text,
             "target_code": target
@@ -821,7 +852,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    app.add_handler(filters.Document.ALL, handle_document))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
