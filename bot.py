@@ -133,7 +133,6 @@ def _translate_chunk(chunk, target):
     url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(chunk)}"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     
-    # Retry mechanism for HTTP 429 Too Many Requests
     for attempt in range(3):
         try:
             with urllib.request.urlopen(req, timeout=25) as response:
@@ -183,7 +182,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
                 translated_full += t_part + " "
                 if detected_code == "unknown":
                     detected_code = d_code
-                time.sleep(0.3) # Small pacing delay to prevent 429
+                time.sleep(0.3)
             except Exception:
                 pass
 
@@ -840,7 +839,7 @@ async def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
-    app.add_handler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
