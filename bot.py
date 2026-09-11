@@ -112,12 +112,21 @@ def _translate_chunk(chunk, target):
         detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
         return translated, detected_code
 
-def _sync_translation_logic(text, target_override=None):
+def _sync_translation_logic(text, chat_id=None, context_data=None):
     try:
-        is_eng = all(ord(c) < 128 for c in text)
-        target = target_override if target_override else ('ml' if is_eng else 'en')
+        is_malayalam = bool(re.search(r'[\u0d00-\u0d7f]', text))
         
-        # Handle large passages safely by splitting into chunks
+        target = 'ml'
+        if chat_id and context_data and "chat_target_lang" in context_data:
+            target = context_data["chat_target_lang"].get(str(chat_id), 'ru')
+        else:
+            target = 'ru'
+        
+        if is_malayalam:
+            target = chat_id and context_data and context_data.get("chat_target_lang", {}).get(str(chat_id), 'ru') or 'ru'
+        else:
+            target = 'ml'
+
         max_chunk = 1500
         chunks = [text[i:i+max_chunk] for i in range(0, len(text), max_chunk)]
         
@@ -179,8 +188,8 @@ def _sync_translation_logic(text, target_override=None):
     except Exception as e:
         return {"error": f"Error: {str(e)[:40]}"}
 
-async def execute_translation(text, target_override=None):
-    return await asyncio.to_thread(_sync_translation_logic, text, target_override)
+async def execute_translation(text, chat_id=None, context_data=None):
+    return await asyncio.to_thread(_sync_translation_logic, text, chat_id, context_data)
 
 MAX_FREE_USERS = 500
 
@@ -231,6 +240,30 @@ async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⚠️ This command can only be used inside a Telegram Group!", parse_mode="HTML")
 
+async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("🇷🇺 Russian (RU)", callback_data="set_target_ru"), InlineKeyboardButton("🇩🇪 German (DE)", callback_data="set_target_de")],
+        [InlineKeyboardButton("🇹🇷 Turkish (TR)", callback_data="set_target_tr"), InlineKeyboardButton("🇰🇿 Kazakh (KK)", callback_data="set_target_kk")],
+        [InlineKeyboardButton("🇺🇿 Uzbek (UZ)", callback_data="set_target_uz"), InlineKeyboardButton("🇬🇧 English (EN)", callback_data="set_target_en")],
+    ]
+    await update.message.reply_text(
+        "⚙️ <b>Two-Way Translation Settings:</b>\nChoose the partner language for automatic translation in this chat/group:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    lang_code = query.data.replace("set_target_", "")
+    chat_id = str(query.message.chat_id)
+
+    if "chat_target_lang" not in context.bot_data:
+        context.bot_data["chat_target_lang"] = {}
+    
+    context.bot_data["chat_target_lang"][chat_id] = lang_code
+    await query.edit_message_text(f"✅ Partner language successfully set to: <b>{lang_code.upper()}</b> for this chat!", parse_mode="HTML")
+
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
@@ -264,22 +297,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌌 <b>QUANTUM TWO-WAY TRANSLATION BRIDGE</b> 🌌\n"
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
-        "💬 <b>1. Personal Chat (PM):</b>\n"
-        "• Send text, voice notes, or PDF documents directly to me in <b>any language</b> for instant translation!\n\n"
-        "👥 <b>2. Telegram Groups (Automatic 2-Way):</b>\n"
-        "• Add this bot to any group chat.\n"
-        "• <b>User 1</b> types in their language → <b>Bot automatically translates it.</b>\n"
-        "• <b>User 2</b> replies in their language → <b>Bot translates it back automatically.</b> No manual setup needed!\n\n"
+        "💬 <b>1. Personal & Group Chat (Automatic Two-Way):</b>\n"
+        "• You type in Malayalam ➔ Partner gets Russian/Target language automatically.\n"
+        "• Partner types in Target language ➔ You get Malayalam automatically.\n"
+        "• Use <b>/settings</b> to change partner language anytime!\n\n"
         "<b>Commands:</b>\n"
+        "⚙️ /settings • Two-Way Language Settings\n"
         "🎧 /vibe • Play Chill Vibe Music\n"
-        "🎵 /customsong • Set Custom VIP Song [VIP]\n"
-        "🎨 /customtheme • Set Custom Theme URL [VIP]\n"
-        "🎨 /theme • Holographic UI Theme\n"
-        "🌍 /setlang • Choose Target Language\n"
         "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • VIP Vault\n\n"
-        "<b>Send any text or voice note to begin!</b>"
+        "<b>Send any text or PDF document to begin!</b>"
     )
     try:
         await update.message.reply_animation(animation=ANIM_WELCOME_URL, caption=welcome, parse_mode="HTML")
@@ -308,89 +336,6 @@ async def vibe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"⚠️ Vibe error: {str(e)[:40]}")
 
-async def custom_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-    _, _, is_vip = is_user_active(context, user_id, chat_id)
-    if not is_vip:
-        await update.message.reply_text("🔒 <b>/customsong is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
-        return
-    args = context.args
-    if not args:
-        await update.message.reply_text("🎵 Usage: <code>/customsong [Direct MP3 Audio URL]</code>", parse_mode="HTML")
-        return
-    if "user_custom_song" not in context.bot_data: context.bot_data["user_custom_song"] = {}
-    context.bot_data["user_custom_song"][str(user_id)] = args[0]
-    await update.message.reply_text("✅ Custom VIP Song saved successfully! Use /vibe to play it.", parse_mode="HTML")
-
-async def custom_theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-    _, _, is_vip = is_user_active(context, user_id, chat_id)
-    if not is_vip:
-        await update.message.reply_text("🔒 <b>/customtheme is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
-        return
-    args = context.args
-    if not args:
-        await update.message.reply_text("🎨 Usage: <code>/customtheme [Giphy/Image URL]</code>", parse_mode="HTML")
-        return
-    if "user_custom_bg" not in context.bot_data: context.bot_data["user_custom_bg"] = {}
-    context.bot_data["user_custom_bg"][str(user_id)] = args[0]
-    await update.message.reply_text("✅ Custom VIP Theme background saved successfully!", parse_mode="HTML")
-
-async def setlang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🇮🇳 Malayalam", callback_data="lang_ml"), InlineKeyboardButton("🇩🇪 German", callback_data="lang_de")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"), InlineKeyboardButton("🇮🇷 Persian", callback_data="lang_fa")],
-        [InlineKeyboardButton("🇷🇺 Russian", callback_data="lang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="lang_fr")],
-        [InlineKeyboardButton("🇪🇸 Spanish", callback_data="lang_es"), InlineKeyboardButton("🇦🇪 Arabic", callback_data="lang_ar")],
-        [InlineKeyboardButton("🇮🇳 Hindi", callback_data="lang_hi"), InlineKeyboardButton("🇨🇳 Chinese", callback_data="lang_zh")],
-        [InlineKeyboardButton("🇯🇵 Japanese", callback_data="lang_ja"), InlineKeyboardButton("🇰🇷 Korean", callback_data="lang_ko")],
-        [InlineKeyboardButton("🇮🇹 Italian", callback_data="lang_it"), InlineKeyboardButton("🇹🇷 Turkish", callback_data="lang_tr")],
-        [InlineKeyboardButton("🇺🇦 Ukrainian", callback_data="lang_uk"), InlineKeyboardButton("🇻🇳 Vietnamese", callback_data="lang_vi")],
-    ]
-    await update.message.reply_text("🌍 <b>Select your default target language:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
-
-async def lang_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    lang_code = query.data.replace("lang_", "")
-    user_id = str(update.effective_user.id)
-
-    if "user_lang" not in context.bot_data: context.bot_data["user_lang"] = {}
-    context.bot_data["user_lang"][user_id] = lang_code
-    
-    await query.edit_message_text(f"✅ Target language successfully set to: <b>{lang_code.upper()}</b>", parse_mode="HTML")
-
-async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-    _, _, is_vip = is_user_active(context, user_id, chat_id)
-    keyboard = []
-    for key, item in STANDARD_THEMES.items():
-        keyboard.append([InlineKeyboardButton(item["label"], callback_data=f"settheme_{key}")])
-    for key, item in PREMIUM_THEMES.items():
-        label = f"✨ {item['label']}" if is_vip else f"🔒 {item['label']} [VIP]"
-        keyboard.append([InlineKeyboardButton(label, callback_data=f"settheme_{key}")])
-    await update.message.reply_text("🎨 <b>Select Holographic Theme:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
-
-async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    theme_key = query.data.replace("settheme_", "")
-    user_id = update.effective_user.id
-    chat_id = query.message.chat_id
-    _, _, is_vip = is_user_active(context, user_id, chat_id)
-
-    selected = ALL_THEMES.get(theme_key)
-    if not selected: return
-    if selected.get("vip") and not is_vip:
-        await query.answer("🔒 VIP Locked! Upgrade using Telegram Stars.", show_alert=True)
-        return
-    if "user_theme" not in context.bot_data: context.bot_data["user_theme"] = {}
-    context.bot_data["user_theme"][str(user_id)] = theme_key
-    await query.edit_message_text(f"✨ Theme updated to:\n<b>{selected['label']}</b>", parse_mode="HTML")
-
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
@@ -412,24 +357,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
     if not update.message or not update.message.text: return
     
-    user_id = str(update.effective_user.id)
-    
-    if "pending_file_type" in context.user_data:
-        file_info = context.user_data.pop("pending_file_type")
-        target_lang_input = update.message.text.strip().lower()
-        
-        target_code = target_lang_input[:2]
-        for k, v in VOICE_MAP.items():
-            if target_lang_input in k:
-                target_code = v["code"]
-                break
-
-        await process_media_file_direct(update.effective_chat.id, context, file_info["file_id"], file_info["type"], target_code, update)
-        return
-
     text_content = update.message.text.strip()
-    target_override = context.bot_data.get("user_lang", {}).get(user_id)
-    await process_and_reply(update, context, text_content, target_override)
+    chat_id = update.effective_chat.id
+    await process_and_reply(update, context, text_content, chat_id)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
@@ -449,9 +379,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         trans_text = "Voice message translation"
         await placeholder.delete()
         
-        user_id = str(update.effective_user.id)
-        target_override = context.bot_data.get("user_lang", {}).get(user_id)
-        await process_and_reply(update, context, trans_text, target_override)
+        chat_id = update.effective_chat.id
+        await process_and_reply(update, context, trans_text, chat_id)
     except Exception as e:
         await placeholder.edit_text(f"⚠️ Voice error: {str(e)[:40]}")
     finally:
@@ -471,39 +400,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Please send a valid PDF, TXT or DOCX document!")
         return
 
-    context.user_data["pending_file_type"] = {"file_id": doc.file_id, "type": "doc"}
-
-    keyboard = [
-        [InlineKeyboardButton("🇮🇳 Malayalam", callback_data="asklang_ml"), InlineKeyboardButton("🇩🇪 German", callback_data="asklang_de")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="asklang_en"), InlineKeyboardButton("🇮🇷 Persian", callback_data="asklang_fa")],
-        [InlineKeyboardButton("🇷🇺 Russian", callback_data="asklang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="asklang_fr")],
-    ]
-    await update.message.reply_text(
-        "📄 <b>Document received!</b>\nWhich language do you want to translate this document into?",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def asklang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    target_code = query.data.replace("asklang_", "")
-
-    if "pending_file_type" not in context.user_data:
-        await query.edit_message_text("⚠️ Session expired. Please send the file again.")
-        return
-
-    file_info = context.user_data.pop("pending_file_type")
-    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Processing large passage...", parse_mode="HTML")
-    
-    await process_media_file_direct(update.effective_chat.id, context, file_info["file_id"], file_info["type"], target_code, update)
-
-async def process_media_file_direct(chat_id, context, file_id, file_type, target_code, update_obj):
+    chat_id = update.effective_chat.id
     placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Reading document & translating large passage...</i>", parse_mode="HTML")
     extracted_text = ""
 
     try:
-        file = await context.bot.get_file(file_id)
+        file = await context.bot.get_file(doc.file_id)
         doc_path = f"doc_{chat_id}_{int(time.time())}.file"
         await file.download_to_drive(doc_path)
         with open(doc_path, 'rb') as f:
@@ -520,12 +422,12 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
         extracted_text = extracted_text[:10000]
         await placeholder.delete()
 
-        user = update_obj.effective_user
-        res = await execute_translation(extracted_text, target_code)
+        user = update.effective_user
+        res = await execute_translation(extracted_text, chat_id, context.bot_data)
         
         translation = res.get("trans", extracted_text)
         src_lang = res.get("src", "English")
-        trg_lang = res.get("trg", "Malayalam")
+        trg_lang = res.get("trg", "Target Language")
         
         if len(translation) > 3500:
             chunks = [translation[i:i+3500] for i in range(0, len(translation), 3500)]
@@ -551,26 +453,25 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
     except Exception as e:
         await placeholder.edit_text(f"⚠️ Error processing file: {str(e)[:40]}")
 
-async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, target_override=None):
+async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, chat_id: int):
     user = update.effective_user
     user_id = user.id
-    chat_id = update.effective_chat.id
     user_name = user.first_name or "Operator"
 
     active, status_val, is_vip = is_user_active(context, user_id, chat_id)
     if not active:
-        await send_store_menu(update.effective_chat.id, context)
+        await send_store_menu(chat_id, context)
         return
 
-    placeholder = await update.message.reply_text("⚡ <i>Translating passage...</i>", parse_mode="HTML")
-    res = await execute_translation(text, target_override)
+    placeholder = await update.message.reply_text("⚡ <i>Translating...</i>", parse_mode="HTML")
+    res = await execute_translation(text, chat_id, context.bot_data)
 
     if "error" in res:
         await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
         return
 
     src_lang = res.get("src", "English")
-    trg_lang = res.get("trg", "Malayalam")
+    trg_lang = res.get("trg", "Target")
     translation = res.get("trans", text)
     native_p = res.get("native_p", text)
     latin_p = res.get("latin_p", "")
@@ -587,7 +488,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     card_text = (
         f"👤 <b>{user_name}</b>\n"
         f"────────────────────────\n"
-        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_info['flag']}</code>\n"
+        f"{src_info['flag']} <code>{src_lang.upper()}</code> ➔ {trg_info['flag']} <code>{trg_lang.upper()}</code>\n"
         f"────────────────────────\n\n"
         f"💬 <b>{translation[:1500]}</b>\n\n"
         f"{native_p_block}"
@@ -710,11 +611,8 @@ async def main():
     
     await app.bot.set_my_commands([
         BotCommand("start", "Start Translator Bridge"),
+        BotCommand("settings", "Configure Two-Way Partner Language"),
         BotCommand("vibe", "Play Chill Vibe Music"),
-        BotCommand("customsong", "Set VIP Custom Song [VIP]"),
-        BotCommand("customtheme", "Set VIP Custom Theme [VIP]"),
-        BotCommand("theme", "Holographic UI Theme"),
-        BotCommand("setlang", "Choose Target Language"),
         BotCommand("status", "Quota & Core Status"),
         BotCommand("stop", "Pause Bot"),
         BotCommand("resume", "Resume Bot"),
@@ -722,22 +620,18 @@ async def main():
     ])
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("settings", settings_command))
     app.add_handler(CommandHandler("vibe", vibe_command))
-    app.add_handler(CommandHandler("customsong", custom_song_command))
-    app.add_handler(CommandHandler("customtheme", custom_theme_command))
-    app.add_handler(CommandHandler("setlang", setlang_command))
-    app.add_handler(CommandHandler("setgroup", set_group_command))
-    app.add_handler(CommandHandler("theme", theme_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("resume", resume_command))
     app.add_handler(CommandHandler("premium", premium_command))
 
+    app.add_handler(CallbackQueryHandler(settings_callback, pattern="^set_target_"))
     app.add_handler(CallbackQueryHandler(plan_selection_callback, pattern="^buy_"))
     app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^play_"))
     app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
     app.add_handler(CallbackQueryHandler(lang_selection_callback, pattern="^lang_"))
-    app.add_handler(CallbackQueryHandler(asklang_callback, pattern="^asklang_"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
