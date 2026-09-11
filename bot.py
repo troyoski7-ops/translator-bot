@@ -213,12 +213,14 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         text = str(text).strip()
         translated, src_lang_name = _translate_chunk(text, target)
 
+        # Force English translation for meaning if target is not English
         meaning_en = translated
-        if target != 'en':
-            try:
-                meaning_en, _ = _translate_chunk(text[:400], 'en')
-            except Exception:
-                pass
+        try:
+            m_res, _ = _translate_chunk(text[:400], 'en')
+            if m_res:
+                meaning_en = m_res
+        except Exception:
+            pass
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name)
         if not translated:
