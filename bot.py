@@ -130,26 +130,22 @@ def get_voice_info(lang_name):
     return VOICE_MAP["english"]
 
 def _translate_chunk(chunk, target):
-    # Utilizing MyMemory Translation API which has no strict IP blocking/429 limits
-    encoded_q = urllib.parse.quote(chunk[:500])
-    url = f"https://api.mymemory.translated.net/get?q={encoded_q}&langpair=autodetect|{target}"
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(chunk)}"
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
     
-    for attempt in range(3):
+    for attempt in range(4):
         try:
-            with urllib.request.urlopen(req, timeout=20) as response:
+            with urllib.request.urlopen(req, timeout=25) as response:
                 res_data = json.loads(response.read().decode('utf-8'))
-                match_data = res_data.get("responseData", {})
-                translated = match_data.get("translatedText", "")
-                if not translated:
-                    translated = chunk
-                return translated, "auto"
+                translated = "".join([item[0] for item in res_data[0] if item[0]])
+                detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
+                return translated, detected_code
         except Exception as e:
-            if attempt < 2:
-                time.sleep(1)
+            if attempt < 3:
+                time.sleep(1.5 * (attempt + 1))
                 continue
-            return chunk, "auto"
-    return chunk, "auto"
+            raise e
+    return "", "unknown"
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     try:
@@ -160,18 +156,63 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             target = context_data["user_lang"].get(str(user_id), 'en')
 
         text = str(text).strip()
-        translated, detected_code = _translate_chunk(text, target)
+        paragraphs = text.split('\n')
+        chunks = []
+        for p in paragraphs:
+            if not p.strip():
+                continue
+            words = p.split()
+            curr = ""
+            for w in words:
+                if len(curr) + len(w) < 350:
+                    curr += w + " "
+                else:
+                    chunks.append(curr.strip())
+                    curr = w + " "
+            if curr:
+                chunks.append(curr.strip())
+        if not chunks:
+            chunks = [text]
+
+        translated_full = ""
+        detected_code = "unknown"
+        for chunk in chunks:
+            try:
+                t_part, d_code = _translate_chunk(chunk, target)
+                translated_full += t_part + " "
+                if detected_code == "unknown":
+                    detected_code = d_code
+                time.sleep(0.3)
+            except Exception:
+                pass
+
+        translated = translated_full.strip()
+        if not translated:
+            translated, detected_code = _translate_chunk(text[:400], target)
 
         meaning_en = translated
         if target != 'en':
             try:
-                meaning_en, _ = _translate_chunk(text[:400], 'en')
+                meaning_en, _ = _translate_chunk(text[:500], 'en')
             except Exception:
                 pass
 
         phonetic_text = text[:300]
+        try:
+            url_phonetic = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
+            req_p = urllib.request.Request(url_phonetic, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req_p, timeout=5) as resp_p:
+                p_data = json.loads(resp_p.read().decode('utf-8'))
+                if len(p_data) > 0 and len(p_data[0]) > 0:
+                    for item in p_data[0]:
+                        if len(item) > 3 and item[3]:
+                            phonetic_text = item[3]
+                            break
+        except Exception:
+            pass
+
         if not translated:
-            return {"error": "Translation service is busy. Please try again."}
+            return {"error": "Translation failed. Please try again."}
 
         lang_names = {
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
@@ -190,25 +231,25 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             'ca': 'Catalan', 'eu': 'Basque', 'gl': 'Galician', 'la': 'Latin'
         }
         
-        src_lang_name = lang_names.get(target, "Auto")
+        src_lang_name = lang_names.get(detected_code, detected_code.upper() if detected_code != "unknown" else detected_code.capitalize())
         target_lang_name = lang_names.get(target, target.upper())
 
         import random
         detected_mood = random.choice(["✨ Cosmic & Positive", "💫 Deep & Philosophical", "🔥 High Energy Vibe", "💎 Pure Elite Class"])
 
         return {
-            "src": "Detected Source",
+            "src": src_lang_name,
             "trg": target_lang_name,
             "trans": translated,
             "meaning": meaning_en,
             "native_p": text[:300],
-            "latin_p": phonetic_text,
-            "cultural_insight": f"Expression Bridge | Aura: {detected_mood}",
+            "latin_p": phonetic_text if phonetic_text != text[:300] else text[:300],
+            "cultural_insight": f"Expression used in {src_lang_name} | Aura: {detected_mood}",
             "native_text": text,
             "target_code": target
         }
     except Exception as e:
-        return {"error": "Translation service is busy. Please try again."}
+        return {"error": f"Error: {str(e)[:40]}"}
 
 async def execute_translation(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     return await asyncio.to_thread(_sync_translation_logic, text, chat_id, user_id, context_data, is_group)
