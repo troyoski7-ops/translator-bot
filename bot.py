@@ -197,7 +197,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             'pt': 'Portuguese', 'is': 'Icelandic', 'ga': 'Irish', 'bg': 'Bulgarian', 'sr': 'Serbian',
             'hr': 'Croatian', 'sl': 'Slovenian', 'sq': 'Albanian', 'et': 'Estonian', 'lv': 'Latvian',
             'lt': 'Lithuanian', 'bs': 'Bosnian', 'mk': 'Macedonian', 'mt': 'Maltese', 'lb': 'Luxembourgish',
-            'ca': 'Catalan', 'eu': 'Basque', 'gl': 'Galician', 'la': 'Latin', 'mongolian': 'Mongolian'
+            'ca': 'Catalan', 'eu': 'Basque', 'gl': 'Galician', 'la': 'Latin'
         }
         
         src_lang_name = lang_names.get(detected_code, detected_code.upper() if detected_code != "unknown" else detected_code.capitalize())
@@ -650,6 +650,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     context.bot_data[f"aud_src_{msg_id}"] = {"text": text[:500], "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("code", "en"), "lang": src_lang, "flag": src_info["flag"]}
     context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation[:500], "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("code", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
 
+    # Audio buttons order: First original language audio, then target language audio
     keyboard = [
         [
             InlineKeyboardButton(f"🔊 {src_info['flag']} Listen ({src_lang})", callback_data=f"play_src_{msg_id}"),
@@ -802,7 +803,7 @@ async def main():
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
-    app.add_handler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
