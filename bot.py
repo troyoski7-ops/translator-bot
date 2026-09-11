@@ -116,7 +116,6 @@ def _sync_translation_logic(text, chat_id=None, context_data=None):
     try:
         is_malayalam = bool(re.search(r'[\u0d00-\u0d7f]', text))
         
-        target = 'ml'
         if chat_id and context_data and "chat_target_lang" in context_data:
             target = context_data["chat_target_lang"].get(str(chat_id), 'ru')
         else:
@@ -263,6 +262,23 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     context.bot_data["chat_target_lang"][chat_id] = lang_code
     await query.edit_message_text(f"✅ Partner language successfully set to: <b>{lang_code.upper()}</b> for this chat!", parse_mode="HTML")
+
+async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    theme_key = query.data.replace("settheme_", "")
+    user_id = update.effective_user.id
+    chat_id = query.message.chat_id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
+
+    selected = ALL_THEMES.get(theme_key)
+    if not selected: return
+    if selected.get("vip") and not is_vip:
+        await query.answer("🔒 VIP Locked! Upgrade using Telegram Stars.", show_alert=True)
+        return
+    if "user_theme" not in context.bot_data: context.bot_data["user_theme"] = {}
+    context.bot_data["user_theme"][str(user_id)] = theme_key
+    await query.edit_message_text(f"✨ Theme updated to:\n<b>{selected['label']}</b>", parse_mode="HTML")
 
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -628,10 +644,9 @@ async def main():
     app.add_handler(CommandHandler("premium", premium_command))
 
     app.add_handler(CallbackQueryHandler(settings_callback, pattern="^set_target_"))
+    app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
     app.add_handler(CallbackQueryHandler(plan_selection_callback, pattern="^buy_"))
     app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^play_"))
-    app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
-    app.add_handler(CallbackQueryHandler(lang_selection_callback, pattern="^lang_"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
