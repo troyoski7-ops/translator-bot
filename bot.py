@@ -146,7 +146,7 @@ def _detect_language_name(text):
         return "French"
     elif any(c in text for c in "أدذرزسشصضطظعغفقكلمنهوﻲي"):
         return "Arabic"
-    elif any(c in text for c in "अआइईउऊऋएऐओऔकखगghधङ"):
+    elif any(c in text for c in "अआइईउऊऋएऐओऔकखगघङ"):
         return "Hindi"
     else:
         return "English"
@@ -175,7 +175,6 @@ def _translate_chunk(chunk, target):
     return chunk, _detect_language_name(chunk)
 
 def _get_latin_phonetic(text, src_lang):
-    # Fallback romanization mappings for precise phonetic text
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -188,10 +187,8 @@ def _get_latin_phonetic(text, src_lang):
     except Exception:
         pass
 
-    # Custom phonetic transliteration mapping for Malayalam / common scripts
     clean_lang = (src_lang or "").lower()
     if "malayalam" in clean_lang:
-        # Custom clean phonetic map for Malayalam words like 'സുഖമാണോ' -> 'sukhamano'
         mapping = {
             'സുഖമാണോ': 'sukhamano',
             'എങ്ങനെണ്ട്': 'enganeyund',
@@ -852,7 +849,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(filters.Document.ALL, handle_document))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
