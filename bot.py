@@ -131,18 +131,18 @@ def get_voice_info(lang_name):
 
 def _translate_chunk(chunk, target):
     url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(chunk)}"
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
     
-    for attempt in range(3):
+    for attempt in range(5):
         try:
-            with urllib.request.urlopen(req, timeout=25) as response:
+            with urllib.request.urlopen(req, timeout=30) as response:
                 res_data = json.loads(response.read().decode('utf-8'))
                 translated = "".join([item[0] for item in res_data[0] if item[0]])
                 detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
                 return translated, detected_code
         except Exception as e:
-            if attempt < 2:
-                time.sleep(1.5 * (attempt + 1))
+            if attempt < 4:
+                time.sleep(2 * (attempt + 1))
                 continue
             raise e
     return "", "unknown"
@@ -164,7 +164,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             words = p.split()
             curr = ""
             for w in words:
-                if len(curr) + len(w) < 400:
+                if len(curr) + len(w) < 300:
                     curr += w + " "
                 else:
                     chunks.append(curr.strip())
@@ -182,18 +182,18 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
                 translated_full += t_part + " "
                 if detected_code == "unknown":
                     detected_code = d_code
-                time.sleep(0.3)
+                time.sleep(0.6)
             except Exception:
                 pass
 
         translated = translated_full.strip()
         if not translated:
-            translated, detected_code = _translate_chunk(text[:400], target)
+            translated, detected_code = _translate_chunk(text[:300], target)
 
         meaning_en = translated
         if target != 'en':
             try:
-                meaning_en, _ = _translate_chunk(text[:600], 'en')
+                meaning_en, _ = _translate_chunk(text[:400], 'en')
             except Exception:
                 pass
 
@@ -212,7 +212,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             pass
 
         if not translated:
-            return {"error": "Translation failed. Please try again."}
+            return {"error": "Translation service is busy. Please try again in a moment."}
 
         lang_names = {
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
@@ -249,7 +249,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             "target_code": target
         }
     except Exception as e:
-        return {"error": f"Error: {str(e)[:40]}"}
+        return {"error": "Translation service is busy. Please try again."}
 
 async def execute_translation(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     return await asyncio.to_thread(_sync_translation_logic, text, chat_id, user_id, context_data, is_group)
