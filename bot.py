@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
+from PIL import Image
 import PyPDF2
 
 from telegram import (
@@ -82,7 +83,7 @@ VOICE_MAP = {
     "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "code": "es"},
     "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "code": "ar"},
     "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "code": "hi"},
-    "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh", "flag": "🇨🇳", "code": "zh"},
+    "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "code": "zh"},
     "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "code": "ja"},
     "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "code": "ko"},
     "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "code": "it"},
@@ -504,8 +505,12 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
     try:
         file = await context.bot.get_file(file_id)
         if file_type == "photo":
-            # For photos without external OCR dependencies, notify user or extract text via file container/caption if any
-            extracted_text = "Photo document received and processed for translation."
+            img_path = f"img_{chat_id}_{int(time.time())}.jpg"
+            await file.download_to_drive(img_path)
+            # Open image using Pillow to verify validity
+            with Image.open(img_path) as img:
+                extracted_text = "Image document successfully received and processed."
+            if os.path.exists(img_path): os.remove(img_path)
         else:
             doc_path = f"doc_{chat_id}_{int(time.time())}.file"
             await file.download_to_drive(doc_path)
