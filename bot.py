@@ -18,6 +18,7 @@ from telegram import (
     LabeledPrice,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    BotCommand
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -33,6 +34,9 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 
 OWNER_USER_ID = 1689374364
 UNLIMITED_GROUPS = set()
+
+# Vibe Chill Lofi Audio Stream/Sample link for welcome and premium vibe
+VIBE_MUSIC_URL = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
 
 async def handle_ping(request):
     return web.Response(text="Translator Bridge Core Online & Functional!")
@@ -55,10 +59,10 @@ STANDARD_THEMES = {
 }
 
 PREMIUM_THEMES = {
-    "vip_gold": {"label": "👑 Royal Imperial Gold", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "quote_prefix": "👑 ", "vip": True},
-    "vip_cyber": {"label": "🐉 Cyber Tokyo Neon", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBER MATRIX VIP ⚡", "quote_prefix": "🔮 ", "vip": True},
-    "vip_matrix": {"label": "⚡ Quantum Astral Core", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "✨ ASTRAL HORIZON ✨", "quote_prefix": "🪐 ", "vip": True},
-    "vip_sound": {"label": "🎧 Hologram Soundwaves", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "quote_prefix": "❄️ ", "vip": True}
+    "vip_gold": {"label": "👑 Royal Imperial Gold", "url": "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif", "badge": "⚜️ 24K GOLD VIP ⚜️", "vip": True},
+    "vip_cyber": {"label": "🐉 Cyber Tokyo Neon", "url": "https://media.giphy.com/media/3oKIPnAiaMCws8nOsE/giphy.gif", "badge": "⚡ CYBER MATRIX VIP ⚡", "vip": True},
+    "vip_matrix": {"label": "⚡ Quantum Astral Core", "url": "https://media.giphy.com/media/l378c0402U49fs29O/giphy.gif", "badge": "✨ ASTRAL HORIZON ✨", "vip": True},
+    "vip_sound": {"label": "🎧 Hologram Soundwaves", "url": "https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif", "badge": "💎 DIAMOND PRESTIGE 💎", "vip": True}
 }
 
 ALL_THEMES = {**STANDARD_THEMES, **PREMIUM_THEMES}
@@ -68,24 +72,24 @@ ANIM_STORE_URL = "https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif"
 VIP_GIFT_STICKER = "https://media.giphy.com/media/l0ExhcMymdL6TrZ84/giphy.gif"
 
 VOICE_MAP = {
-    "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "loc": "Kerala"},
-    "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
-    "farsi": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "loc": "Tehran"},
-    "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "loc": "Berlin"},
-    "ukrainian": {"edge": "uk-UA-PolinaNeural", "gtts": "uk", "flag": "🇺🇦", "loc": "Kyiv"},
-    "vietnamese": {"edge": "vi-VN-HoaiMyNeural", "gtts": "vi", "flag": "🇻🇳", "loc": "Hanoi"},
-    "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "loc": "Beijing"},
-    "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "loc": "Tokyo"},
-    "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "loc": "Seoul"},
-    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "loc": "Paris"},
-    "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "loc": "Madrid"},
-    "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "loc": "Moscow"},
-    "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "loc": "London"},
-    "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "loc": "Dubai"},
-    "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "loc": "Delhi"},
-    "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "loc": "Rome"},
-    "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "loc": "Istanbul"},
-    "georgian": {"edge": "ka-GE-EkaNeural", "gtts": "ka", "flag": "🇬🇪", "loc": "Tbilisi"},
+    "malayalam": {"edge": "ml-IN-SobhanaNeural", "gtts": "ml", "flag": "🇮🇳", "code": "ml"},
+    "german": {"edge": "de-DE-KatjaNeural", "gtts": "de", "flag": "🇩🇪", "code": "de"},
+    "english": {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🇬🇧", "code": "en"},
+    "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "code": "fa"},
+    "russian": {"edge": "ru-RU-SvetlanaNeural", "gtts": "ru", "flag": "🇷🇺", "code": "ru"},
+    "french": {"edge": "fr-FR-DeniseNeural", "gtts": "fr", "flag": "🇫🇷", "code": "fr"},
+    "spanish": {"edge": "es-ES-ElviraNeural", "gtts": "es", "flag": "🇪🇸", "code": "es"},
+    "arabic": {"edge": "ar-AE-HamdanNeural", "gtts": "ar", "flag": "🇦🇪", "code": "ar"},
+    "hindi": {"edge": "hi-IN-SwaraNeural", "gtts": "hi", "flag": "🇮🇳", "code": "hi"},
+    "chinese": {"edge": "zh-CN-XiaoxiaoNeural", "gtts": "zh-CN", "flag": "🇨🇳", "code": "zh"},
+    "japanese": {"edge": "ja-JP-NanamiNeural", "gtts": "ja", "flag": "🇯🇵", "code": "ja"},
+    "korean": {"edge": "ko-KR-SunHiNeural", "gtts": "ko", "flag": "🇰🇷", "code": "ko"},
+    "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "code": "it"},
+    "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "code": "tr"},
+    "ukrainian": {"edge": "uk-UA-PolinaNeural", "gtts": "uk", "flag": "🇺🇦", "code": "uk"},
+    "vietnamese": {"edge": "vi-VN-HoaiMyNeural", "gtts": "vi", "flag": "🇻🇳", "code": "vi"},
+    "georgian": {"edge": "ka-GE-EkaNeural", "gtts": "ka", "flag": "🇬🇪", "code": "ka"},
+    "azerbaijani": {"edge": "az-AZ-BanuNeural", "gtts": "az", "flag": "🇦🇿", "code": "az"},
 }
 
 def get_voice_info(lang_name):
@@ -93,14 +97,13 @@ def get_voice_info(lang_name):
     for k, v in VOICE_MAP.items():
         if k in clean:
             return v
-    return {"edge": "en-US-JennyNeural", "gtts": "en", "flag": "🌐", "loc": lang_name.capitalize() if lang_name else "Global"}
+    return VOICE_MAP["english"]
 
-def _sync_translation_logic(text):
+def _sync_translation_logic(text, target_override=None):
     try:
         is_eng = all(ord(c) < 128 for c in text)
-        target = 'ml' if is_eng else 'en'
+        target = target_override if target_override else ('ml' if is_eng else 'en')
         
-        # 1. Main Translation
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(text)}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         
@@ -109,7 +112,6 @@ def _sync_translation_logic(text):
             translated = "".join([item[0] for item in res_data[0] if item[0]])
             detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
 
-        # 2. Phonetic / Transliteration extraction from Google API
         phonetic_text = text
         try:
             url_phonetic = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text)}"
@@ -131,28 +133,28 @@ def _sync_translation_logic(text):
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
             'vi': 'Vietnamese', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
             'fr': 'French', 'es': 'Spanish', 'ru': 'Russian', 'en': 'English',
-            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish', 'ka': 'Georgian'
+            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish', 'ka': 'Georgian', 'az': 'Azerbaijani'
         }
         
-        src_lang_name = lang_names.get(detected_code, detected_code.capitalize() if detected_code != "unknown" else "Foreign Language")
-        if is_eng:
-            src_lang_name = "English"
+        src_lang_name = lang_names.get(detected_code, detected_code.upper() if detected_code != "unknown" else "Foreign Language")
+        target_lang_name = lang_names.get(target, target.upper())
 
         return {
             "src": src_lang_name,
-            "trg": "Malayalam" if is_eng else "English",
+            "trg": target_lang_name,
             "trans": translated,
             "meaning": translated,
             "native_p": text,
             "latin_p": phonetic_text if phonetic_text != text else text,
             "cultural_insight": f"An expression commonly used in {src_lang_name}.",
-            "native_text": text
+            "native_text": text,
+            "target_code": target
         }
     except Exception as e:
         return {"error": f"Error: {str(e)[:40]}"}
 
-async def execute_translation(text):
-    return await asyncio.to_thread(_sync_translation_logic, text)
+async def execute_translation(text, target_override=None):
+    return await asyncio.to_thread(_sync_translation_logic, text, target_override)
 
 FREE_LIMIT = 100
 PLANS = {
@@ -204,7 +206,8 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
         "Your free 100 messages quota has expired!\n\n"
         "• Unlimited Translations\n"
         "• High-Definition Dual Audio Pronunciations\n"
-        "• Exclusive VIP Themes\n\n"
+        "• Exclusive VIP Themes\n"
+        "• 🎧 VIP Vibe Music Lounge Access\n\n"
         "• <b>1 Month VIP:</b> 50 Stars\n"
         "• <b>3 Months ELITE:</b> 120 Stars\n"
         "• <b>1 Year LEGEND:</b> 399 Stars"
@@ -227,16 +230,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vip_badge = "🌟 <b>VIP HOLOGRAPHIC SHIELD ACTIVE</b>\n" if is_vip else ""
 
     welcome = (
-        f"🌌 <b>QUANTUM TWO-WAY TRANSLATION BRIDGE</b> 🌌\n"
+        f"🌌 <b>QUANTUM TWO-WAY TRANSLATION BRIDGE & VIBE LOUNGE</b> 🌌\n"
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (PM):</b>\n"
         "• Send text or voice notes directly to me in <b>any language</b> for instant translation, phonetics, and meanings.\n\n"
-        "👥 <b>2. Telegram Groups:</b>\n"
+        "👥 <b>2. Telegram Groups (Automatic 2-Way):</b>\n"
         "• Add this bot to any group chat.\n"
-        "• <b>User 1</b> types in their language → <b>Bot translates it automatically.</b>\n"
-        "• <b>User 2</b> replies in their language → <b>Bot translates it back automatically.</b>\n\n"
+        "• <b>User 1</b> types in their language → <b>Bot automatically translates it.</b>\n"
+        "• <b>User 2</b> replies in their language → <b>Bot automatically translates it back.</b> No manual setup needed!\n\n"
+        "🎧 Use /vibe to play chill background music anytime!\n\n"
         "<b>Commands:</b>\n"
+        "🎧 /vibe • Play Chill Vibe Music\n"
+        "🌍 /setlang • Choose Target Language\n"
         "🎨 /theme • Holographic UI Theme\n"
         "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
@@ -245,8 +251,52 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     try:
         await update.message.reply_animation(animation=ANIM_WELCOME_URL, caption=welcome, parse_mode="HTML")
+        # Play welcome vibe audio
+        await update.message.reply_audio(audio=VIBE_MUSIC_URL, caption="🎧 <b>Welcome Vibe Track:</b> Enjoy the chill rhythm!", parse_mode="HTML")
     except Exception:
         await update.message.reply_text(welcome, parse_mode="HTML")
+
+async def vibe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    active, _, is_vip = is_user_active(context, user_id, chat_id)
+    
+    if not active:
+        await send_store_menu(chat_id, context)
+        return
+
+    try:
+        await update.message.reply_audio(
+            audio=VIBE_MUSIC_URL, 
+            caption="🎧 <b>VIP Vibe Lounge:</b> Relax and enjoy the stream!", 
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Vibe error: {str(e)[:40]}")
+
+async def setlang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [InlineKeyboardButton("🇮🇳 Malayalam", callback_data="lang_ml"), InlineKeyboardButton("🇩🇪 German", callback_data="lang_de")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="lang_en"), InlineKeyboardButton("🇮🇷 Persian", callback_data="lang_fa")],
+        [InlineKeyboardButton("🇷🇺 Russian", callback_data="lang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="lang_fr")],
+        [InlineKeyboardButton("🇪🇸 Spanish", callback_data="lang_es"), InlineKeyboardButton("🇦🇪 Arabic", callback_data="lang_ar")],
+        [InlineKeyboardButton("🇮🇳 Hindi", callback_data="lang_hi"), InlineKeyboardButton("🇨🇳 Chinese", callback_data="lang_zh")],
+        [InlineKeyboardButton("🇯🇵 Japanese", callback_data="lang_ja"), InlineKeyboardButton("🇰🇷 Korean", callback_data="lang_ko")],
+        [InlineKeyboardButton("🇮🇹 Italian", callback_data="lang_it"), InlineKeyboardButton("🇹🇷 Turkish", callback_data="lang_tr")],
+        [InlineKeyboardButton("🇺🇦 Ukrainian", callback_data="lang_uk"), InlineKeyboardButton("🇻🇳 Vietnamese", callback_data="lang_vi")],
+    ]
+    await update.message.reply_text("🌍 <b>Select your default target language:</b>", parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def lang_selection_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    lang_code = query.data.replace("lang_", "")
+    user_id = str(update.effective_user.id)
+
+    if "user_lang" not in context.bot_data: context.bot_data["user_lang"] = {}
+    context.bot_data["user_lang"][user_id] = lang_code
+    
+    await query.edit_message_text(f"✅ Target language successfully set to: <b>{lang_code.upper()}</b>", parse_mode="HTML")
 
 async def theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -312,7 +362,13 @@ async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
     if not update.message or not update.message.text: return
-    await process_and_reply(update, context, update.message.text.strip())
+    
+    user_id = str(update.effective_user.id)
+    target_override = None
+    if "user_lang" in context.bot_data and user_id in context.bot_data["user_lang"]:
+        target_override = context.bot_data["user_lang"][user_id]
+        
+    await process_and_reply(update, context, update.message.text.strip(), target_override)
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.chat_data.get("paused", False): return
@@ -331,7 +387,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         trans_text = "Voice message translation"
         await placeholder.delete()
-        await process_and_reply(update, context, trans_text)
+        
+        user_id = str(update.effective_user.id)
+        target_override = context.bot_data.get("user_lang", {}).get(user_id)
+        await process_and_reply(update, context, trans_text, target_override)
     except Exception as e:
         await placeholder.edit_text(f"⚠️ Voice error: {str(e)[:40]}")
     finally:
@@ -340,7 +399,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try: os.remove(p)
                 except Exception: pass
 
-async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, target_override=None):
     user = update.effective_user
     user_id = user.id
     chat_id = update.effective_chat.id
@@ -352,7 +411,7 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         return
 
     placeholder = await update.message.reply_text("⚡ <i>Translating...</i>", parse_mode="HTML")
-    res = await execute_translation(text)
+    res = await execute_translation(text, target_override)
 
     if "error" in res:
         await placeholder.edit_text(f"⚠️ <b>Error:</b> {res['error']}", parse_mode="HTML")
@@ -393,8 +452,8 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     )
 
     msg_id = placeholder.message_id
-    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("gtts", "en"), "lang": src_lang, "flag": src_info["flag"]}
-    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("gtts", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
+    context.bot_data[f"aud_src_{msg_id}"] = {"text": text, "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("code", "en"), "lang": src_lang, "flag": src_info["flag"]}
+    context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation, "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("code", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
 
     keyboard = [
         [
@@ -502,7 +561,21 @@ async def main():
 
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
     
+    # Set bot commands for left menu
+    await app.bot.set_my_commands([
+        BotCommand("start", "Start Translator Bridge"),
+        BotCommand("vibe", "Play Chill Vibe Music"),
+        BotCommand("setlang", "Choose Target Language"),
+        BotCommand("theme", "Holographic UI Theme"),
+        BotCommand("status", "Quota & Core Status"),
+        BotCommand("stop", "Pause Bot"),
+        BotCommand("resume", "Resume Bot"),
+        BotCommand("premium", "VIP Vault")
+    ])
+
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("vibe", vibe_command))
+    app.add_handler(CommandHandler("setlang", setlang_command))
     app.add_handler(CommandHandler("setgroup", set_group_command))
     app.add_handler(CommandHandler("theme", theme_command))
     app.add_handler(CommandHandler("custombg", custom_bg_command))
@@ -514,6 +587,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(plan_selection_callback, pattern="^buy_"))
     app.add_handler(CallbackQueryHandler(handle_audio_play, pattern="^play_"))
     app.add_handler(CallbackQueryHandler(theme_selection_callback, pattern="^settheme_"))
+    app.add_handler(CallbackQueryHandler(lang_selection_callback, pattern="^lang_"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
