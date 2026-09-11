@@ -8,13 +8,13 @@ import sys
 import urllib.request
 import urllib.parse
 import json
+import requests
 
 from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
 from PIL import Image
-import pytesseract
 import PyPDF2
 
 from telegram import (
@@ -248,7 +248,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (PM):</b>\n"
-        "• Send text, voice notes, photos, or PDF documents directly to me in <b>any language</b> for instant OCR & translation!\n\n"
+        "• Send text, voice notes, photos, or PDF documents directly to me in <b>any language</b> for instant translation!\n\n"
         "👥 <b>2. Telegram Groups (Automatic 2-Way):</b>\n"
         "• Add this bot to any group chat.\n"
         "• <b>User 1</b> types in their language → <b>Bot automatically translates it.</b>\n"
@@ -490,12 +490,12 @@ async def asklang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     file_info = context.user_data.pop("pending_file_type")
-    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Scanning image via OCR...", parse_mode="HTML")
+    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Processing image/document...", parse_mode="HTML")
     
     await process_media_file_direct(update.effective_chat.id, context, file_info["file_id"], file_info["type"], target_code, update)
 
 async def process_media_file_direct(chat_id, context, file_id, file_type, target_code, update_obj):
-    placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Extracting text & translating...</i>", parse_mode="HTML")
+    placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Processing file & translating...</i>", parse_mode="HTML")
     extracted_text = ""
 
     try:
@@ -503,7 +503,15 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
         if file_type == "photo":
             img_path = f"img_{chat_id}_{int(time.time())}.jpg"
             await file.download_to_drive(img_path)
-            extracted_text = await asyncio.to_thread(pytesseract.image_to_string, Image.open(img_path))
+            
+            # Using online free OCR API (OCR.space free public API) to extract text without local binaries
+            with open(img_path, 'rb') as f:
+                payload = {'isOverlayRequired': False, 'apikey': 'helloworld', 'language': 'auto'}
+                r = requests.post('https://api.ocr.space/parse/image', files={'file': f}, data=payload, timeout=10)
+                result = r.json()
+                if result.get("ParsedResults"):
+                    extracted_text = result["ParsedResults"][0].get("ParsedText", "")
+            
             if os.path.exists(img_path): os.remove(img_path)
         else:
             doc_path = f"doc_{chat_id}_{int(time.time())}.file"
@@ -517,7 +525,7 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
 
         extracted_text = extracted_text.strip()
         if not extracted_text:
-            extracted_text = "No readable text found in the image/document."
+            extracted_text = "No readable text found in the image."
 
         extracted_text = extracted_text[:3500]
         await placeholder.delete()
