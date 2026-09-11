@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from aiohttp import web
 from gtts import gTTS
 import edge_tts
+from PIL import Image
+import pytesseract
 import PyPDF2
 
 from telegram import (
@@ -112,6 +114,10 @@ def _sync_translation_logic(text, target_override=None):
             res_data = json.loads(response.read().decode('utf-8'))
             translated = "".join([item[0] for item in res_data[0] if item[0]])
             detected_code = res_data[2] if len(res_data) > 2 and res_data[2] else "unknown"
+
+        if target == 'ml':
+            translated = re.sub(r'\s+([അ-ഹൗൺംഃ്ക്-ഹ്ലവ്വഷ്സഹ])', r'\1', translated)
+            translated = re.sub(r'(\u0d3c)\s+', r'\1', translated)
 
         phonetic_text = text
         try:
@@ -243,7 +249,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (PM):</b>\n"
-        "• Send text, voice notes, or PDF documents directly to me in <b>any language</b> for instant translation!\n\n"
+        "• Send text, voice notes, photos, or PDF documents directly to me in <b>any language</b> for instant OCR & translation!\n\n"
         "👥 <b>2. Telegram Groups (Automatic 2-Way):</b>\n"
         "• Add this bot to any group chat.\n"
         "• <b>User 1</b> types in their language → <b>Bot automatically translates it.</b>\n"
@@ -450,7 +456,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="asklang_ru"), InlineKeyboardButton("🇫🇷 French", callback_data="asklang_fr")],
     ]
     await update.message.reply_text(
-        "🖼 <b>Image received!</b>\nPlease choose your target language below:",
+        "🖼 <b>Image received!</b>\nWhich language do you want to translate this image into?",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -485,18 +491,21 @@ async def asklang_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     file_info = context.user_data.pop("pending_file_type")
-    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Processing file...", parse_mode="HTML")
+    await query.edit_message_text(f"✅ Target language selected: <b>{target_code.upper()}</b>. Scanning image via OCR...", parse_mode="HTML")
     
     await process_media_file_direct(update.effective_chat.id, context, file_info["file_id"], file_info["type"], target_code, update)
 
 async def process_media_file_direct(chat_id, context, file_id, file_type, target_code, update_obj):
-    placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Reading file & translating...</i>", parse_mode="HTML")
+    placeholder = await context.bot.send_message(chat_id=chat_id, text="⚡ <i>Extracting text & translating...</i>", parse_mode="HTML")
     extracted_text = ""
 
     try:
         file = await context.bot.get_file(file_id)
         if file_type == "photo":
-            extracted_text = "Photo received. For instant translation, please send text messages directly."
+            img_path = f"img_{chat_id}_{int(time.time())}.jpg"
+            await file.download_to_drive(img_path)
+            extracted_text = await asyncio.to_thread(pytesseract.image_to_string, Image.open(img_path))
+            if os.path.exists(img_path): os.remove(img_path)
         else:
             doc_path = f"doc_{chat_id}_{int(time.time())}.file"
             await file.download_to_drive(doc_path)
@@ -509,7 +518,7 @@ async def process_media_file_direct(chat_id, context, file_id, file_type, target
 
         extracted_text = extracted_text.strip()
         if not extracted_text:
-            extracted_text = "Document contents successfully extracted."
+            extracted_text = "No readable text found in the image/document."
 
         extracted_text = extracted_text[:3500]
         await placeholder.delete()
@@ -724,7 +733,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    app.add_handler(filters.Document.ALL, handle_document))
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
