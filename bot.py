@@ -153,7 +153,7 @@ def _detect_language_name(text):
     else:
         return "English"
 
-def _smart_translate(text, target_lang):
+def _google_translate_full(text, target_lang):
     try:
         encoded_q = urllib.parse.quote(text[:500])
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target_lang}&dt=t&q={encoded_q}"
@@ -161,12 +161,12 @@ def _smart_translate(text, target_lang):
         with urllib.request.urlopen(req, timeout=10) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             trans_text = "".join([item[0] for item in res_data[0] if item[0]])
-            if trans_text and trans_text.strip().lower() != text.lower():
+            if trans_text:
                 return trans_text
     except Exception:
         pass
     
-    # Fallback to MyMemory if Google translation endpoint fails
+    # Fallback to MyMemory
     try:
         fallback_url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(text[:500])}&langpair=autodetect|{target_lang}"
         req = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -180,7 +180,7 @@ def _smart_translate(text, target_lang):
 def _get_latin_phonetic(text, src_lang):
     clean_lang = (src_lang or "").lower()
     
-    # Generate transliteration/phonetic in English characters using translation endpoint with dt=rm
+    # Generate romanized/latin phonetic representation using Google Translate dt=rm parameter
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -194,9 +194,7 @@ def _get_latin_phonetic(text, src_lang):
         pass
 
     if "malayalam" in clean_lang:
-        if "അവിടെ ആരൊക്കെ ഉണ്ട്" in text:
-            return "Avide aarokke undu"
-        res = _smart_translate(text, "en")
+        res = _google_translate_full(text, "en")
         if res and res.lower() != text.lower():
             return res
         return "sukhamano" if "സുഖമാണോ" in text else text[:300]
@@ -225,7 +223,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             target = 'en'
 
         # Main Translation
-        translated = _smart_translate(text, target)
+        translated = _google_translate_full(text, target)
         if not translated:
             translated = text
 
@@ -247,14 +245,15 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             'wie gehts es dir': 'How are you?',
             'آب گوشت': 'Meat broth / Stew',
             'آبگوشت': 'Meat broth / Stew',
-            'അവിടെ ആരൊക്കെ ഉണ്ട്': 'Who all are there?'
+            'അവിടെ ആരൊക്കെ ഉണ്ട്': 'Who all are there?',
+            'കൂടെ വരുന്നു': 'Coming along?'
         }
         
         t_lower = text.lower()
         if t_lower in manual_meanings:
             meaning_en = manual_meanings[t_lower]
         else:
-            meaning_en = _smart_translate(text, 'en')
+            meaning_en = _google_translate_full(text, 'en')
 
         if not meaning_en or meaning_en.strip().lower() == text.lower():
             meaning_en = f"English translation of {src_lang_name} expression"
