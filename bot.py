@@ -201,8 +201,28 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         target = 'en'
         if is_group:
             chat_key = str(chat_id)
-            if chat_key and context_data and "chat_target_lang" in context_data:
-                target = context_data["chat_target_lang"].get(chat_key, 'en')
+            user_str = str(user_id) if user_id else ""
+            
+            # Smart Two-Way Group Routing: 
+            # If sender has set their personal language, translate to the OTHER person's preferred language or group partner setting.
+            user_langs = context_data.get("user_lang", {}) if context_data else {}
+            group_partners = context_data.get("chat_target_lang", {}) if context_data else {}
+            
+            partner_lang = group_partners.get(chat_key, 'ru') # Default partner target if not set
+            sender_lang = user_langs.get(user_str, '')
+
+            # Detect source language of the text message
+            src_detected = _detect_language_name(text).lower()
+            
+            # If sender is using their own language, translate to partner/group target language
+            # If sender is using partner language, translate back to sender's / group member language
+            if sender_lang and sender_lang in src_detected:
+                target = partner_lang
+            else:
+                # If someone else replies, send it to the active user's language or fallback
+                target = sender_lang if sender_lang else partner_lang
+                if target == src_detected or target[:2] == src_detected[:2]:
+                    target = partner_lang if partner_lang != target else 'en'
         else:
             if user_id and context_data and "user_lang" in context_data:
                 target = context_data["user_lang"].get(str(user_id), 'en')
@@ -542,7 +562,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>Send any text or PDF document to begin!</b>"
     )
     
-    # Show My Language and Partner's Language buttons ONLY in groups
     if is_group:
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🌍 My Language", callback_data="open_mylang_menu"), InlineKeyboardButton("🔄 Change Language", callback_data="open_changelang_menu")],
@@ -798,7 +817,6 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     context.bot_data[f"aud_src_{msg_id}"] = {"text": text[:500], "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("code", "en"), "lang": src_lang, "flag": src_info["flag"]}
     context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation[:500], "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("code", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
 
-    # Show Partner's Language buttons in card ONLY if it's a group chat
     if is_group:
         keyboard = [
             [
