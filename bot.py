@@ -199,11 +199,13 @@ def _get_latin_phonetic(text, src_lang):
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     try:
         target = 'en'
-        chat_key = str(chat_id) if chat_id else str(user_id)
-        if chat_key and context_data and "chat_target_lang" in context_data:
-            target = context_data["chat_target_lang"].get(chat_key, 'en')
-        elif user_id and context_data and "user_lang" in context_data:
-            target = context_data["user_lang"].get(str(user_id), 'en')
+        if is_group:
+            chat_key = str(chat_id)
+            if chat_key and context_data and "chat_target_lang" in context_data:
+                target = context_data["chat_target_lang"].get(chat_key, 'en')
+        else:
+            if user_id and context_data and "user_lang" in context_data:
+                target = context_data["user_lang"].get(str(user_id), 'en')
 
         text = str(text).strip()
         src_lang_name = _detect_language_name(text)
@@ -345,6 +347,10 @@ async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ This command can only be used inside a Telegram Group!", parse_mode="HTML")
 
 async def mylanguage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat.type not in ["group", "supergroup"]:
+        await update.message.reply_text("ℹ️ My Language setting is designed for groups. In personal chats, translations automatically use default or custom text!")
+        return
     keyboard = [
         [InlineKeyboardButton("🇮🇳 Malayalam", callback_data="set_my_ml"), InlineKeyboardButton("🇬🇧 English", callback_data="set_my_en")],
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_my_ru"), InlineKeyboardButton("🇩🇪 German", callback_data="set_my_de")],
@@ -381,12 +387,16 @@ async def mylanguage_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🇰🇿 Kazakh", callback_data="set_my_kk"), InlineKeyboardButton("🇹🇯 Tajik", callback_data="set_my_tg")],
     ]
     await update.message.reply_text(
-        "🌍 <b>My Language (നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക):</b>\nSelect the language you want to receive messages in:",
+        "🌍 <b>My Language (ഗ്രൂപ്പിലെ നിങ്ങളുടെ ഭാഷ):</b>\nSelect your language for this group:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 async def partnerlanguage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    if chat.type not in ["group", "supergroup"]:
+        await update.message.reply_text("ℹ️ Partner Language is designed for groups. In personal chats, translations automatically use your settings!")
+        return
     keyboard = [
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_partner_ru"), InlineKeyboardButton("🇮🇳 Malayalam", callback_data="set_partner_ml")],
         [InlineKeyboardButton("🇬🇧 English", callback_data="set_partner_en"), InlineKeyboardButton("🇩🇪 German", callback_data="set_partner_de")],
@@ -395,10 +405,40 @@ async def partnerlanguage_command(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_partner_hi"), InlineKeyboardButton("🇸🇦 Arabic", callback_data="set_partner_ar")],
     ]
     await update.message.reply_text(
-        "👥 <b>Partner's Language (അപ്പുറത്തെ ആളുടെ ഭാഷ):</b>\nSelect the target language for this chat/group:",
+        "👥 <b>Partner's Language (അപ്പുറത്തെ ആളുടെ ഭാഷ):</b>\nSelect the target language for this group:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
+
+async def custom_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
+    if not is_vip:
+        await update.message.reply_text("🔒 <b>/customsong is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("🎵 Usage: <code>/customsong [Direct MP3 Audio URL]</code>", parse_mode="HTML")
+        return
+    if "user_custom_song" not in context.bot_data: context.bot_data["user_custom_song"] = {}
+    context.bot_data["user_custom_song"][str(user_id)] = args[0]
+    await update.message.reply_text("✅ Custom VIP Song saved successfully! Use /vibe to play it.", parse_mode="HTML")
+
+async def custom_theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+    _, _, is_vip = is_user_active(context, user_id, chat_id)
+    if not is_vip:
+        await update.message.reply_text("🔒 <b>/customtheme is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
+        return
+    args = context.args
+    if not args:
+        await update.message.reply_text("🎨 Usage: <code>/customtheme [Giphy/Image URL]</code>", parse_mode="HTML")
+        return
+    if "user_custom_bg" not in context.bot_data: context.bot_data["user_custom_bg"] = {}
+    context.bot_data["user_custom_bg"][str(user_id)] = args[0]
+    await update.message.reply_text("✅ Custom VIP Theme background saved successfully!", parse_mode="HTML")
 
 async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -448,36 +488,6 @@ async def theme_selection_callback(update: Update, context: ContextTypes.DEFAULT
     context.bot_data["user_theme"][str(user_id)] = theme_key
     await query.edit_message_text(f"✨ Theme updated to:\n<b>{selected['label']}</b>", parse_mode="HTML")
 
-async def custom_song_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-    _, _, is_vip = is_user_active(context, user_id, chat_id)
-    if not is_vip:
-        await update.message.reply_text("🔒 <b>/customsong is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
-        return
-    args = context.args
-    if not args:
-        await update.message.reply_text("🎵 Usage: <code>/customsong [Direct MP3 Audio URL]</code>", parse_mode="HTML")
-        return
-    if "user_custom_song" not in context.bot_data: context.bot_data["user_custom_song"] = {}
-    context.bot_data["user_custom_song"][str(user_id)] = args[0]
-    await update.message.reply_text("✅ Custom VIP Song saved successfully! Use /vibe to play it.", parse_mode="HTML")
-
-async def custom_theme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
-    _, _, is_vip = is_user_active(context, user_id, chat_id)
-    if not is_vip:
-        await update.message.reply_text("🔒 <b>/customtheme is a VIP exclusive feature! Upgrade via /premium</b>", parse_mode="HTML")
-        return
-    args = context.args
-    if not args:
-        await update.message.reply_text("🎨 Usage: <code>/customtheme [Giphy/Image URL]</code>", parse_mode="HTML")
-        return
-    if "user_custom_bg" not in context.bot_data: context.bot_data["user_custom_bg"] = {}
-    context.bot_data["user_custom_bg"][str(user_id)] = args[0]
-    await update.message.reply_text("✅ Custom VIP Theme background saved successfully!", parse_mode="HTML")
-
 async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚡ <b>HOLOGRAPHIC VIP VAULT</b> ⚡\n\n"
@@ -503,6 +513,8 @@ async def send_store_menu(chat_id, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
+    chat = update.effective_chat
+    is_group = chat.type in ["group", "supergroup"]
     _, _, is_vip = is_user_active(context, user_id, chat_id)
 
     vip_badge = "🌟 <b>VIP HOLOGRAPHIC SHIELD ACTIVE</b>\n" if is_vip else ""
@@ -513,33 +525,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌌 <b>QUANTUM TWO-WAY TRANSLATION BRIDGE</b> 🌌\n"
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
-        "💬 <b>1. Two-Way Language Setup:</b>\n"
-        "• Click <b>/mylanguage</b> to set your preferred language.\n"
-        "• Click <b>/changelanguage</b> to change your language anytime.\n"
-        "• Click <b>/partnerlanguage</b> to set partner's language!\n\n"
+        "💬 <b>1. Translation Setup:</b>\n"
+        "• In <b>Personal Chat</b>, translations work automatically.\n"
+        "• In <b>Groups</b>, use <b>/mylanguage</b> and <b>/partnerlanguage</b> to configure languages!\n\n"
         "<b>Commands:</b>\n"
-        "🌍 /mylanguage • Set Your Language\n"
-        "🔄 /changelanguage • Change Language\n"
-        "👥 /partnerlanguage • Set Partner's Language\n"
+        "🌍 /mylanguage • Set Your Language [Groups]\n"
+        "🔄 /changelanguage • Change Language [Groups]\n"
+        "👥 /partnerlanguage • Set Partner's Language [Groups]\n"
         "🎧 /vibe • Play Chill Vibe Music\n"
+        "🎵 /customsong • Set Custom VIP Song [VIP]\n"
+        "🎨 /customtheme • Set Custom Theme URL [VIP]\n"
         "🎨 /theme • Holographic UI Theme\n"
         "📊 /status • Quota & Core Status\n"
         "⏸ /stop • Pause | ▶️ /resume • Resume\n"
         "⭐️ /premium • VIP Vault\n\n"
         "<b>Send any text or PDF document to begin!</b>"
     )
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌍 My Language", callback_data="open_mylang_menu"), InlineKeyboardButton("🔄 Change Language", callback_data="open_changelang_menu")],
-        [InlineKeyboardButton("👥 Partner's Language", callback_data="open_partnerlang_menu")]
-    ])
+    
+    # Show My Language and Partner's Language buttons ONLY in groups
+    if is_group:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🌍 My Language", callback_data="open_mylang_menu"), InlineKeyboardButton("🔄 Change Language", callback_data="open_changelang_menu")],
+            [InlineKeyboardButton("👥 Partner's Language", callback_data="open_partnerlang_menu")]
+        ])
+    else:
+        keyboard = InlineKeyboardMarkup([])
+
     try:
         if "giphy" in anim_to_show or anim_to_show.endswith(('.gif', '.jpg', '.png')):
-            await update.message.reply_animation(animation=anim_to_show, caption=welcome, parse_mode="HTML", reply_markup=keyboard)
+            if keyboard.inline_keyboard:
+                await update.message.reply_animation(animation=anim_to_show, caption=welcome, parse_mode="HTML", reply_markup=keyboard)
+            else:
+                await update.message.reply_animation(animation=anim_to_show, caption=welcome, parse_mode="HTML")
         else:
-            await update.message.reply_text(welcome, parse_mode="HTML", reply_markup=keyboard)
+            if keyboard.inline_keyboard:
+                await update.message.reply_text(welcome, parse_mode="HTML", reply_markup=keyboard)
+            else:
+                await update.message.reply_text(welcome, parse_mode="HTML")
         await update.message.reply_audio(audio=VIBE_MUSIC_URL, caption="🎧 <b>Welcome Vibe Track:</b> Enjoy the chill rhythm!", parse_mode="HTML")
     except Exception:
-        await update.message.reply_text(welcome, parse_mode="HTML", reply_markup=keyboard)
+        if keyboard.inline_keyboard:
+            await update.message.reply_text(welcome, parse_mode="HTML", reply_markup=keyboard)
+        else:
+            await update.message.reply_text(welcome, parse_mode="HTML")
 
 async def start_lang_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -562,7 +590,7 @@ async def start_lang_button_callback(update: Update, context: ContextTypes.DEFAU
 
     if data in ["open_mylang_menu", "open_changelang_menu"]:
         await query.message.reply_text(
-            "🌍 <b>Choose Your Language (നിങ്ങളുടെ ഭാഷ തിരഞ്ഞെടുക്കുക):</b>",
+            "🌍 <b>Choose Your Language (ഗ്രൂപ്പിലെ നിങ്ങളുടെ ഭാഷ):</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -770,16 +798,25 @@ async def process_and_reply(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     context.bot_data[f"aud_src_{msg_id}"] = {"text": text[:500], "voice_edge": src_info.get("edge"), "gtts_code": src_info.get("code", "en"), "lang": src_lang, "flag": src_info["flag"]}
     context.bot_data[f"aud_trg_{msg_id}"] = {"text": translation[:500], "voice_edge": trg_info.get("edge"), "gtts_code": trg_info.get("code", "en"), "lang": trg_lang, "flag": trg_info["flag"]}
 
-    keyboard = [
-        [
-            InlineKeyboardButton(f"🔊 {src_info['flag']} Listen ({src_lang})", callback_data=f"play_src_{msg_id}"),
-            InlineKeyboardButton(f"🔊 {trg_info['flag']} Listen ({trg_lang})", callback_data=f"play_trg_{msg_id}")
-        ],
-        [
-            InlineKeyboardButton("🌍 My Language", callback_data="open_mylang_menu"),
-            InlineKeyboardButton("👥 Partner's Lang", callback_data="open_partnerlang_menu")
+    # Show Partner's Language buttons in card ONLY if it's a group chat
+    if is_group:
+        keyboard = [
+            [
+                InlineKeyboardButton(f"🔊 {src_info['flag']} Listen ({src_lang})", callback_data=f"play_src_{msg_id}"),
+                InlineKeyboardButton(f"🔊 {trg_info['flag']} Listen ({trg_lang})", callback_data=f"play_trg_{msg_id}")
+            ],
+            [
+                InlineKeyboardButton("🌍 My Language", callback_data="open_mylang_menu"),
+                InlineKeyboardButton("👥 Partner's Language", callback_data="open_partnerlang_menu")
+            ]
         ]
-    ]
+    else:
+        keyboard = [
+            [
+                InlineKeyboardButton(f"🔊 {src_info['flag']} Listen ({src_lang})", callback_data=f"play_src_{msg_id}"),
+                InlineKeyboardButton(f"🔊 {trg_info['flag']} Listen ({trg_lang})", callback_data=f"play_trg_{msg_id}")
+            ]
+        ]
 
     user_theme_key = context.bot_data.get("user_theme", {}).get(str(user_id), "chibi")
     theme_item = ALL_THEMES.get(user_theme_key, {})
@@ -899,12 +936,12 @@ async def main():
     
     await app.bot.set_my_commands([
         BotCommand("start", "Start Translator Bridge"),
-        BotCommand("mylanguage", "Set My Language"),
-        BotCommand("changelanguage", "Change Language"),
-        BotCommand("partnerlanguage", "Set Partner's Language"),
+        BotCommand("mylanguage", "Set My Language [Groups]"),
+        BotCommand("changelanguage", "Change Language [Groups]"),
+        BotCommand("partnerlanguage", "Set Partner's Language [Groups]"),
         BotCommand("vibe", "Play Chill Vibe Music"),
-        BotCommand("customsong", "Set Custom VIP Song [VIP Locked]"),
-        BotCommand("customtheme", "Set Custom Theme URL [VIP Locked]"),
+        BotCommand("customsong", "Set Custom VIP Song [VIP]"),
+        BotCommand("customtheme", "Set Custom Theme URL [VIP]"),
         BotCommand("theme", "Holographic UI Theme"),
         BotCommand("status", "Quota & Core Status"),
         BotCommand("stop", "Pause Bot"),
