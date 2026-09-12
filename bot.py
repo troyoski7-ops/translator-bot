@@ -94,17 +94,6 @@ VOICE_MAP = {
     "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "code": "kk"},
     "uzbek": {"edge": "uz-UZ-MadinaNeural", "gtts": "uz", "flag": "🇺🇿", "code": "uz"},
     "tajik": {"edge": "tg-TJ-MatinNeural", "gtts": "tg", "flag": "🇹🇯", "code": "tg"},
-    "bengali": {"edge": "bn-IN-TanishaNeural", "gtts": "bn", "flag": "🇧🇩", "code": "bn"},
-    "marathi": {"edge": "mr-IN-AarohiNeural", "gtts": "mr", "flag": "🇮🇳", "code": "mr"},
-    "telugu": {"edge": "te-IN-ShrutiNeural", "gtts": "te", "flag": "🇮🇳", "code": "te"},
-    "tamil": {"edge": "ta-IN-PallaviNeural", "gtts": "ta", "flag": "🇮🇳", "code": "ta"},
-    "kannada": {"edge": "kn-IN-SapnaNeural", "gtts": "kn", "flag": "🇮🇳", "code": "kn"},
-    "gujarati": {"edge": "gu-IN-DhwaniNeural", "gtts": "gu", "flag": "🇮🇳", "code": "gu"},
-    "punjabi": {"edge": "pa-IN-VaaniNeural", "gtts": "pa", "flag": "🇮🇳", "code": "pa"},
-    "urdu": {"edge": "ur-PK-UzmaNeural", "gtts": "ur", "flag": "🇵🇰", "code": "ur"},
-    "sinhala": {"edge": "si-LK-ThiliniNeural", "gtts": "si", "flag": "🇱🇰", "code": "si"},
-    "nepali": {"edge": "ne-NP-HemkalaNeural", "gtts": "ne", "flag": "🇳🇵", "code": "ne"},
-    "pashto": {"edge": "ps-AF-LatifaNeural", "gtts": "ps", "flag": "🇦🇫", "code": "ps"},
     "indonesian": {"edge": "id-ID-GadisNeural", "gtts": "id", "flag": "🇮🇩", "code": "id"},
     "malay": {"edge": "ms-MY-YasminNeural", "gtts": "ms", "flag": "🇲🇾", "code": "ms"},
     "filipino": {"edge": "fil-PH-BlessicaNeural", "gtts": "tl", "flag": "🇵🇭", "code": "tl"},
@@ -120,7 +109,6 @@ VOICE_MAP = {
     "hungarian": {"edge": "hu-HU-NoemiNeural", "gtts": "hu", "flag": "🇭🇺", "code": "hu"},
     "romanian": {"edge": "ro-RO-AlinaNeural", "gtts": "ro", "flag": "🇷🇴", "code": "ro"},
     "portuguese": {"edge": "pt-PT-RaquelNeural", "gtts": "pt", "flag": "🇵🇹", "code": "pt"},
-    "persian": {"edge": "fa-IR-DilaraNeural", "gtts": "fa", "flag": "🇮🇷", "code": "fa"},
 }
 
 def get_voice_info(lang_name):
@@ -134,11 +122,11 @@ def _detect_language_name(text):
     t_lower = text.lower()
     if any(c in text for c in "അആഇഈഉഊഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളറണ്‍ന്‍ള്‍ണ്‍"):
         return "Malayalam"
-    elif any(w in t_lower for w in ['mir', 'gehts', 'ich', 'und', 'ist', 'das', 'ein', 'eine', 'guten', 'gute', 'sprechen', 'deutsch', 'qayerda', 'qayerga', 'qanday', 'salom', 'rahmat']):
+    elif any(w in t_lower for w in ['qayerda', 'qayerga', 'qanday', 'salom', 'rahmat', 'yaxshi', 'qalebsiz', 'keling']):
         return "Uzbek"
     elif any(w in t_lower for w in ['аз', 'киҷо', 'дарвоза', 'фаҳмидам', 'субҳ', 'салом']):
         return "Tajik"
-    elif any(w in t_lower for w in ['mir', 'gehts', 'sprechen', 'deutsch']):
+    elif any(w in t_lower for w in ['mir', 'gehts', 'sprechen', 'deutsch', 'guten', 'morgen', 'hallo']):
         return "German"
     elif any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"):
         return "Russian"
@@ -153,6 +141,26 @@ def _detect_language_name(text):
     elif any(c in text for c in "अआइईउऊऋएऐओऔकखगghधङ"):
         return "Hindi"
     else:
+        try:
+            url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={urllib.parse.quote(text[:100])}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+                if len(data) > 2 and data[2]:
+                    code = data[2].lower()
+                    lang_map = {
+                        'ml': 'Malayalam', 'de': 'German', 'en': 'English', 'fa': 'Persian',
+                        'ru': 'Russian', 'fr': 'French', 'es': 'Spanish', 'ar': 'Arabic',
+                        'hi': 'Hindi', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
+                        'it': 'Italian', 'tr': 'Turkish', 'uk': 'Ukrainian', 'vi': 'Vietnamese',
+                        'id': 'Indonesian', 'ms': 'Malay', 'uz': 'Uzbek', 'tg': 'Tajik',
+                        'pt': 'Portuguese', 'nl': 'Dutch', 'pl': 'Polish', 'bn': 'Bengali',
+                        'pa': 'Punjabi', 'ur': 'Urdu', 'mr': 'Marathi', 'te': 'Telugu',
+                        'ta': 'Tamil', 'kn': 'Kannada', 'gu': 'Gujarati', 'si': 'Sinhala'
+                    }
+                    return lang_map.get(code, "English")
+        except Exception:
+            pass
         return "English"
 
 def _mymemory_call(query_text, langpair):
@@ -179,63 +187,25 @@ def _get_latin_phonetic(text, src_lang):
                         return item[3]
     except Exception:
         pass
-
-    clean_lang = (src_lang or "").lower()
-    if "malayalam" in clean_lang:
-        mapping = {
-            'സുഖമാണോ': 'sukhamano',
-            'എങ്ങനെണ്ട്': 'enganeyund',
-            'എവിടെ പോകുന്നു': 'evide pokunnu',
-            'ഹലോ': 'hello',
-            'നന്നായിരിക്കുന്നു': 'nannayirikkunnu',
-            'കാണാം': 'kanam'
-        }
-        for k, v in mapping.items():
-            if k in text:
-                return v
-        return "evide pokunnu" if "എവിടെ" in text else text[:300]
     return text[:300]
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     try:
         text = str(text).strip()
         src_lang_name = _detect_language_name(text)
-        src_lower = src_lang_name.lower()
 
         target = 'en'
         if is_group:
-            # Group Two-Way Smart Logic: 
-            # If sender's text is Malayalam -> Translate to Russian (or partner's language)
-            # If sender's text is Russian -> Translate to Malayalam (or user's preferred language)
-            if "malayalam" in src_lower:
-                target = 'ru'
-            elif "russian" in src_lower:
-                target = 'ml'
-            else:
-                user_langs = context_data.get("user_lang", {}) if context_data else {}
-                group_partners = context_data.get("chat_target_lang", {}) if context_data else {}
-                chat_key = str(chat_id) if chat_id else ""
-                user_str = str(user_id) if user_id else ""
-                
-                partner_lang = group_partners.get(chat_key, 'ru')
-                sender_lang = user_langs.get(user_str, '')
-
-                if sender_lang and sender_lang in src_lower:
-                    target = partner_lang
-                else:
-                    target = sender_lang if sender_lang else partner_lang
-                    if target == src_lower or target[:2] == src_lower[:2]:
-                        target = partner_lang if partner_lang != target else 'en'
+            chat_key = str(chat_id) if chat_id else ""
+            user_str = str(user_id) if user_id else ""
+            user_langs = context_data.get("user_lang", {}) if context_data else {}
+            group_partners = context_data.get("chat_target_lang", {}) if context_data else {}
+            
+            partner_lang = group_partners.get(chat_key, 'en')
+            sender_lang = user_langs.get(user_str, '')
+            target = sender_lang if sender_lang else partner_lang
         else:
-            # Personal Chat Smart Auto Two-Way (Malayalam <-> Russian default)
-            if "malayalam" in src_lower:
-                target = 'ru'
-            elif "russian" in src_lower:
-                target = 'ml'
-            else:
-                target = 'en'
-                if user_id and context_data and "user_lang" in context_data:
-                    target = context_data["user_lang"].get(str(user_id), 'en')
+            target = 'en'
 
         translated = _mymemory_call(text, f"autodetect|{target}")
         if not translated or translated.strip().lower() == text.lower():
@@ -252,36 +222,9 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         if not translated:
             translated = text
 
-        # Meaning in English
-        meaning_en = ""
-        try:
-            g_url_en = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={urllib.parse.quote(text)}"
-            g_req_en = urllib.request.Request(g_url_en, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(g_req_en, timeout=10) as g_resp_en:
-                g_data_en = json.loads(g_resp_en.read().decode('utf-8'))
-                g_trans_en = "".join([item[0] for item in g_data_en[0] if item[0]])
-                if g_trans_en and g_trans_en.strip().lower() != text.lower():
-                    meaning_en = g_trans_en
-        except Exception:
-            pass
-
-        if not meaning_en or meaning_en.strip().lower() == text.lower():
-            m_res = _mymemory_call(text, "autodetect|en")
-            if m_res and m_res.strip().lower() != text.lower():
-                meaning_en = m_res
-
-        if not meaning_en or meaning_en.strip().lower() == text.lower():
-            t_lower = text.lower()
-            if "сух" in t_lower or "സുഖ" in text:
-                meaning_en = "How are you?"
-            elif "эвіде" in t_lower or "എവിടെ" in text:
-                meaning_en = "Where are you going?"
-            elif "спокойной ночи" in t_lower or "спокойной" in t_lower:
-                meaning_en = "Good night"
-            elif "mir geht" in t_lower or "миргет" in t_lower:
-                meaning_en = "I'm fine"
-            else:
-                meaning_en = translated if target == 'en' else "English translation of expression"
+        meaning_en = translated if target == 'en' else _mymemory_call(text, "autodetect|en")
+        if not meaning_en:
+            meaning_en = text
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name)
 
@@ -289,17 +232,10 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
             'vi': 'Vietnamese', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
             'fr': 'French', 'es': 'Spanish', 'ru': 'Russian', 'en': 'English',
-            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish', 'ka': 'Georgian',
-            'az': 'Azerbaijani', 'kk': 'Kazakh', 'uz': 'Uzbek', 'tg': 'Tajik',
-            'bn': 'Bengali', 'mr': 'Marathi', 'te': 'Telugu', 'ta': 'Tamil', 'kn': 'Kannada',
-            'gu': 'Gujarati', 'pa': 'Punjabi', 'ur': 'Urdu', 'si': 'Sinhala', 'ne': 'Nepali',
-            'ps': 'Pashto', 'id': 'Indonesian', 'ms': 'Malay', 'tl': 'Filipino', 'th': 'Thai',
-            'nl': 'Dutch', 'pl': 'Polish', 'sv': 'Swedish', 'no': 'Norwegian', 'da': 'Danish',
-            'fi': 'Finnish', 'el': 'Greek', 'cs': 'Czech', 'hu': 'Hungarian', 'ro': 'Romanian',
-            'pt': 'Portuguese', 'is': 'Icelandic', 'ga': 'Irish', 'bg': 'Bulgarian', 'sr': 'Serbian',
-            'hr': 'Croatian', 'sl': 'Slovenian', 'sq': 'Albanian', 'et': 'Estonian', 'lv': 'Latvian',
-            'lt': 'Lithuanian', 'bs': 'Bosnian', 'mk': 'Macedonian', 'mt': 'Maltese', 'lb': 'Luxembourgish',
-            'ca': 'Catalan', 'eu': 'Basque', 'gl': 'Galician', 'la': 'Latin'
+            'ar': 'Arabic', 'hi': 'Hindi', 'it': 'Italian', 'tr': 'Turkish', 'id': 'Indonesian',
+            'ms': 'Malay', 'uz': 'Uzbek', 'tg': 'Tajik', 'pt': 'Portuguese', 'nl': 'Dutch', 'pl': 'Polish',
+            'bn': 'Bengali', 'pa': 'Punjabi', 'ur': 'Urdu', 'mr': 'Marathi', 'te': 'Telugu',
+            'ta': 'Tamil', 'kn': 'Kannada', 'gu': 'Gujarati', 'si': 'Sinhala'
         }
         
         target_lang_name = lang_names.get(target, target.upper())
@@ -383,38 +319,11 @@ async def mylanguage_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_my_ru"), InlineKeyboardButton("🇩🇪 German", callback_data="set_my_de")],
         [InlineKeyboardButton("🇫🇷 French", callback_data="set_my_fr"), InlineKeyboardButton("🇮🇹 Italian", callback_data="set_my_it")],
         [InlineKeyboardButton("🇪🇸 Spanish", callback_data="set_my_es"), InlineKeyboardButton("🇵🇹 Portuguese", callback_data="set_my_pt")],
-        [InlineKeyboardButton("🇺🇦 Ukrainian", callback_data="set_my_uk"), InlineKeyboardButton("🇵🇱 Polish", callback_data="set_my_pl")],
-        [InlineKeyboardButton("🇳🇱 Dutch", callback_data="set_my_nl"), InlineKeyboardButton("🇸🇪 Swedish", callback_data="set_my_sv")],
-        [InlineKeyboardButton("🇳🇴 Norwegian", callback_data="set_my_no"), InlineKeyboardButton("🇩🇰 Danish", callback_data="set_my_da")],
-        [InlineKeyboardButton("🇫🇮 Finnish", callback_data="set_my_fi"), InlineKeyboardButton("🇮🇸 Icelandic", callback_data="set_my_is")],
-        [InlineKeyboardButton("🇮🇪 Irish", callback_data="set_my_ga"), InlineKeyboardButton("🇬🇷 Greek", callback_data="set_my_el")],
-        [InlineKeyboardButton("🇨🇿 Czech", callback_data="set_my_cs"), InlineKeyboardButton("🇸🇰 Slovak", callback_data="set_my_sk")],
-        [InlineKeyboardButton("🇭🇺 Hungarian", callback_data="set_my_hu"), InlineKeyboardButton("🇷🇴 Romanian", callback_data="set_my_ro")],
-        [InlineKeyboardButton("🇧🇬 Bulgarian", callback_data="set_my_bg"), InlineKeyboardButton("🇷🇸 Serbian", callback_data="set_my_sr")],
-        [InlineKeyboardButton("🇭🇷 Croatian", callback_data="set_my_hr"), InlineKeyboardButton("🇸🇮 Slovenian", callback_data="set_my_sl")],
-        [InlineKeyboardButton("🇦🇱 Albanian", callback_data="set_my_sq"), InlineKeyboardButton("🇪🇪 Estonian", callback_data="set_my_et")],
-        [InlineKeyboardButton("🇱🇻 Latvian", callback_data="set_my_lv"), InlineKeyboardButton("🇱🇹 Lithuanian", callback_data="set_my_lt")],
-        [InlineKeyboardButton("🇧🇦 Bosnian", callback_data="set_my_bs"), InlineKeyboardButton("🇲🇰 Macedonian", callback_data="set_my_mk")],
-        [InlineKeyboardButton("🇲🇹 Maltese", callback_data="set_my_mt"), InlineKeyboardButton("🇱🇺 Luxembourgish", callback_data="set_my_lb")],
-        [InlineKeyboardButton("🇪🇸 Catalan", callback_data="set_my_ca"), InlineKeyboardButton("🇪🇸 Basque", callback_data="set_my_eu")],
-        [InlineKeyboardButton("🇪🇸 Galician", callback_data="set_my_gl"), InlineKeyboardButton("🇻🇦 Latin", callback_data="set_my_la")],
-        [InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_my_hi"), InlineKeyboardButton("🇮🇳 Bengali", callback_data="set_my_bn")],
-        [InlineKeyboardButton("🇮🇳 Marathi", callback_data="set_my_mr"), InlineKeyboardButton("🇮🇳 Telugu", callback_data="set_my_te")],
-        [InlineKeyboardButton("🇮🇳 Tamil", callback_data="set_my_ta"), InlineKeyboardButton("🇮🇳 Kannada", callback_data="set_my_kn")],
-        [InlineKeyboardButton("🇮🇳 Gujarati", callback_data="set_my_gu"), InlineKeyboardButton("🇮🇳 Punjabi", callback_data="set_my_pa")],
-        [InlineKeyboardButton("🇵🇰 Urdu", callback_data="set_my_ur"), InlineKeyboardButton("🇱🇰 Sinhala", callback_data="set_my_si")],
-        [InlineKeyboardButton("🇳🇵 Nepali", callback_data="set_my_ne"), InlineKeyboardButton("🇦🇫 Pashto", callback_data="set_my_ps")],
-        [InlineKeyboardButton("🇮🇷 Persian", callback_data="set_my_fa"), InlineKeyboardButton("🇸🇦 Arabic", callback_data="set_my_ar")],
-        [InlineKeyboardButton("🇬🇪 Georgian", callback_data="set_my_ka"), InlineKeyboardButton("🇦🇿 Azerbaijani", callback_data="set_my_az")],
-        [InlineKeyboardButton("🇹🇷 Turkish", callback_data="set_my_tr"), InlineKeyboardButton("🇨🇳 Chinese", callback_data="set_my_zh")],
-        [InlineKeyboardButton("🇯🇵 Japanese", callback_data="set_my_ja"), InlineKeyboardButton("🇰🇷 Korean", callback_data="set_my_ko")],
-        [InlineKeyboardButton("🇻🇳 Vietnamese", callback_data="set_my_vi"), InlineKeyboardButton("🇹🇭 Thai", callback_data="set_my_th")],
         [InlineKeyboardButton("🇮🇩 Indonesian", callback_data="set_my_id"), InlineKeyboardButton("🇲🇾 Malay", callback_data="set_my_ms")],
-        [InlineKeyboardButton("🇵🇭 Filipino", callback_data="set_my_tl"), InlineKeyboardButton("🇺🇿 Uzbek", callback_data="set_my_uz")],
-        [InlineKeyboardButton("🇰🇿 Kazakh", callback_data="set_my_kk"), InlineKeyboardButton("🇹🇯 Tajik", callback_data="set_my_tg")],
+        [InlineKeyboardButton("🇺🇿 Uzbek", callback_data="set_my_uz"), InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_my_hi")],
     ]
     await update.message.reply_text(
-        "🌍 <b>My Language:</b>\nSelect your language for this group:",
+        "🌍 <b>My Language:</b>\nSelect your target language for this group:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -425,11 +334,10 @@ async def partnerlanguage_command(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("ℹ️ Partner Language is designed for groups.")
         return
     keyboard = [
-        [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_partner_ru"), InlineKeyboardButton("🇮🇳 Malayalam", callback_data="set_partner_ml")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="set_partner_en"), InlineKeyboardButton("🇩🇪 German", callback_data="set_partner_de")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="set_partner_en"), InlineKeyboardButton("🇮🇳 Malayalam", callback_data="set_partner_ml")],
+        [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_partner_ru"), InlineKeyboardButton("🇩🇪 German", callback_data="set_partner_de")],
         [InlineKeyboardButton("🇫🇷 French", callback_data="set_partner_fr"), InlineKeyboardButton("🇪🇸 Spanish", callback_data="set_partner_es")],
-        [InlineKeyboardButton("🇺🇿 Uzbek", callback_data="set_partner_uz"), InlineKeyboardButton("🇹🇯 Tajik", callback_data="set_partner_tg")],
-        [InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_partner_hi"), InlineKeyboardButton("🇸🇦 Arabic", callback_data="set_partner_ar")],
+        [InlineKeyboardButton("🇮🇩 Indonesian", callback_data="set_partner_id"), InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_partner_hi")],
     ]
     await update.message.reply_text(
         "👥 <b>Partner's Language:</b>\nSelect the target language for this group:",
@@ -553,11 +461,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (DM):</b>\n"
-        "• Automatically translates between languages (e.g., Malayalam to Russian and vice versa) instantly without any settings!\n\n"
+        "• Send any text (English, German, Uzbek, Indonesian, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
+        "• First audio plays in original language, second audio plays in <b>English</b>.\n\n"
         "💬 <b>2. Telegram Groups:</b>\n"
-        "• Use <b>/mylanguage</b> to set your preferred language (e.g. Malayalam).\n"
-        "• Use <b>/partnerlanguage</b> to set partner's language (e.g. Russian).\n"
-        "• Once set, messages automatically translate back and forth between both languages!\n\n"
+        "• Use <b>/mylanguage</b> and <b>/partnerlanguage</b> to set custom group translations.\n\n"
         "<b>Commands:</b>\n"
         "🌍 /mylanguage • Set Your Language [Groups]\n"
         "🔄 /changelanguage • Change Language [Groups]\n"
@@ -607,14 +514,14 @@ async def start_lang_button_callback(update: Update, context: ContextTypes.DEFAU
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_my_ru"), InlineKeyboardButton("🇩🇪 German", callback_data="set_my_de")],
         [InlineKeyboardButton("🇫🇷 French", callback_data="set_my_fr"), InlineKeyboardButton("🇮🇹 Italian", callback_data="set_my_it")],
         [InlineKeyboardButton("🇪🇸 Spanish", callback_data="set_my_es"), InlineKeyboardButton("🇵🇹 Portuguese", callback_data="set_my_pt")],
-        [InlineKeyboardButton("🇺🇦 Ukrainian", callback_data="set_my_uk"), InlineKeyboardButton("🇵🇱 Polish", callback_data="set_my_pl")],
-        [InlineKeyboardButton("🇺🇿 Uzbek", callback_data="set_my_uz"), InlineKeyboardButton("🇹🇯 Tajik", callback_data="set_my_tg")],
-        [InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_my_hi"), InlineKeyboardButton("🇸🇦 Arabic", callback_data="set_my_ar")],
+        [InlineKeyboardButton("🇮🇩 Indonesian", callback_data="set_my_id"), InlineKeyboardButton("🇲🇾 Malay", callback_data="set_my_ms")],
+        [InlineKeyboardButton("🇺🇿 Uzbek", callback_data="set_my_uz"), InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_my_hi")],
     ]
     partner_keyboard = [
-        [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_partner_ru"), InlineKeyboardButton("🇮🇳 Malayalam", callback_data="set_partner_ml")],
-        [InlineKeyboardButton("🇬🇧 English", callback_data="set_partner_en"), InlineKeyboardButton("🇩🇪 German", callback_data="set_partner_de")],
-        [InlineKeyboardButton("🇺🇿 Uzbek", callback_data="set_partner_uz"), InlineKeyboardButton("🇹🇯 Tajik", callback_data="set_partner_tg")],
+        [InlineKeyboardButton("🇬🇧 English", callback_data="set_partner_en"), InlineKeyboardButton("🇮🇳 Malayalam", callback_data="set_partner_ml")],
+        [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_partner_ru"), InlineKeyboardButton("🇩🇪 German", callback_data="set_partner_de")],
+        [InlineKeyboardButton("🇫🇷 French", callback_data="set_partner_fr"), InlineKeyboardButton("🇪🇸 Spanish", callback_data="set_partner_es")],
+        [InlineKeyboardButton("🇮🇩 Indonesian", callback_data="set_partner_id"), InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_partner_hi")],
     ]
 
     if data in ["open_mylang_menu", "open_changelang_menu"]:
