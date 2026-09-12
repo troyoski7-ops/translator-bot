@@ -124,9 +124,11 @@ def _detect_language_name(text):
         return "Malayalam"
     elif any(w in t_lower for w in ['qayerda', 'qayerga', 'qanday', 'salom', 'rahmat', 'yaxshi', 'qalebsiz', 'keling']):
         return "Uzbek"
+    elif any(w in t_lower for w in ['apa', 'terima', 'kasih', 'selamat', 'pagi', 'malam', 'bagaimana']):
+        return "Indonesian"
     elif any(w in t_lower for w in ['аз', 'киҷо', 'дарвоза', 'фаҳмидам', 'субҳ', 'салом']):
         return "Tajik"
-    elif any(w in t_lower for w in ['mir', 'gehts', 'sprechen', 'deutsch', 'guten', 'morgen', 'hallo']):
+    elif any(w in t_lower for w in ['mir', 'gehts', 'sprechen', 'deutsch', 'guten', 'morgen', 'hallo', 'wie']):
         return "German"
     elif any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"):
         return "Russian"
@@ -222,9 +224,26 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         if not translated:
             translated = text
 
-        meaning_en = translated if target == 'en' else _mymemory_call(text, "autodetect|en")
-        if not meaning_en:
+        # Meaning in English (Always force English translation for meaning reference)
+        meaning_en = ""
+        if src_lang_name.lower() == "english":
             meaning_en = text
+        else:
+            try:
+                g_url_en = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={urllib.parse.quote(text)}"
+                g_req_en = urllib.request.Request(g_url_en, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(g_req_en, timeout=10) as g_resp_en:
+                    g_data_en = json.loads(g_resp_en.read().decode('utf-8'))
+                    g_trans_en = "".join([item[0] for item in g_data_en[0] if item[0]])
+                    if g_trans_en:
+                        meaning_en = g_trans_en
+            except Exception:
+                pass
+        
+        if not meaning_en:
+            meaning_en = _mymemory_call(text, "autodetect|en")
+        if not meaning_en:
+            meaning_en = translated
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name)
 
@@ -461,7 +480,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (DM):</b>\n"
-        "• Send any text (English, German, Uzbek, Indonesian, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
+        "• Send any text (Indonesian, German, Uzbek, French, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
         "• First audio plays in original language, second audio plays in <b>English</b>.\n\n"
         "💬 <b>2. Telegram Groups:</b>\n"
         "• Use <b>/mylanguage</b> and <b>/partnerlanguage</b> to set custom group translations.\n\n"
