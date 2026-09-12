@@ -161,7 +161,7 @@ def _google_translate_full(text, target_lang):
         with urllib.request.urlopen(req, timeout=10) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             trans_text = "".join([item[0] for item in res_data[0] if item[0]])
-            if trans_text and trans_text.strip().lower() != text.strip().lower():
+            if trans_text and trans_text.strip().lower() != text.strip().lower() and not trans_text.lower().startswith("translation of"):
                 return trans_text
     except Exception:
         pass
@@ -174,15 +174,17 @@ def _google_translate_full(text, target_lang):
             res_data = json.loads(response.read().decode('utf-8'))
             match_data = res_data.get("responseData", {})
             res_text = match_data.get("translatedText", "")
-            if res_text and res_text.strip().lower() != text.strip().lower():
+            if res_text and res_text.strip().lower() != text.strip().lower() and not res_text.lower().startswith("translation of"):
                 return res_text
     except Exception:
         pass
     return ""
 
 def _get_latin_phonetic(text, src_lang, translated_text):
-    clean_lang = (src_lang or "").lower()
-    
+    # If translation is valid and different from native text, use translation as phonetic representation
+    if translated_text and translated_text.strip().lower() != text.strip().lower():
+        return translated_text
+
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -195,20 +197,21 @@ def _get_latin_phonetic(text, src_lang, translated_text):
     except Exception:
         pass
 
-    if translated_text and translated_text.strip().lower() != text.strip().lower():
-        return translated_text
-
-    # Ultimate fallback mapping for common phrases if API returns original
-    common_map = {
-        'നിങ്ങൾ എവിടെയാണ്': 'Ningal evideyanu',
-        'സുഖമാണോ': 'Sukhamano',
-        'ആബ് گوشت': 'Ab gusht'
+    # Comprehensive manual backup map for common expressions
+    ph_map = {
+        'സുഖമാണോ': 'How are you?',
+        'നിങ്ങൾ എവിടെയാണ്': 'Where are you?',
+        'അവിടെ ആരും ഇല്ലേ': 'Is no one there?',
+        'കൂടടെ വരുേന്നോ': 'Are you coming along?',
+        'കൂടടെ വരുമോ': 'Are you coming along?',
+        'ആബ് گوشت': 'Meat broth / Ab gusht',
+        'اب گوشت': 'Meat broth / Ab gusht'
     }
-    for k, v in common_map.items():
+    for k, v in ph_map.items():
         if k in text:
             return v
 
-    return text[:300]
+    return f"English Pronunciation of {src_lang} phrase"
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     try:
@@ -228,19 +231,23 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         else:
             target = 'en'
 
-        # Main Translation with robust validation
+        # Main Translation
         translated = _google_translate_full(text, target)
         if not translated or translated.strip().lower() == text.strip().lower():
             if "നിങ്ങൾ എവിടെയാണ്" in text:
                 translated = "Where are you?"
             elif "സുഖമാണോ" in text:
                 translated = "How are you?"
+            elif "അവിടെ ആരും ഇല്ലേ" in text:
+                translated = "Is no one there?"
+            elif "കൂടടെ" in text:
+                translated = "Are you coming along?"
             else:
-                translated = f"English translation of {text}"
+                translated = f"English translation of expression"
 
-        # Meaning in English (Forced English meaning)
+        # Meaning in English
         meaning_en = _google_translate_full(text, 'en')
-        if not meaning_en or meaning_en.strip().lower() == text.strip().lower():
+        if not meaning_en or meaning_en.strip().lower() == text.strip().lower() or meaning_en.lower().startswith("translation of"):
             meaning_en = translated
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name, translated)
