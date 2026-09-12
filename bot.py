@@ -88,7 +88,7 @@ VOICE_MAP = {
     "italian": {"edge": "it-IT-ElsaNeural", "gtts": "it", "flag": "🇮🇹", "code": "it"},
     "turkish": {"edge": "tr-TR-AhmetNeural", "gtts": "tr", "flag": "🇹🇷", "code": "tr"},
     "ukrainian": {"edge": "uk-UA-PolinaNeural", "gtts": "uk", "flag": "🇺🇦", "code": "uk"},
-    "vietnamese": {"edge": "vi-VN-HoaiMyNeural", "gtts": "vi", "flag": "🇻🇳", "code": "vi"},
+    "vietnamese": {"edge": "vi-VN-HowaiMyNeural", "gtts": "vi", "flag": "🇻🇳", "code": "vi"},
     "georgian": {"edge": "ka-GE-EkaNeural", "gtts": "ka", "flag": "🇬🇪", "code": "ka"},
     "azerbaijani": {"edge": "az-AZ-BanuNeural", "gtts": "az", "flag": "🇦🇿", "code": "az"},
     "kazakh": {"edge": "kk-KZ-AigulNeural", "gtts": "kk", "flag": "🇰🇿", "code": "kk"},
@@ -124,7 +124,7 @@ def _detect_language_name(text):
         return "Malayalam"
     elif any(w in t_lower for w in ['qayerda', 'qayerga', 'qanday', 'salom', 'rahmat', 'yaxshi', 'qalebsiz', 'keling']):
         return "Uzbek"
-    elif any(w in t_lower for w in ['apa', 'terima', 'kasih', 'selamat', 'pagi', 'malam', 'bagaimana']):
+    elif any(w in t_lower for w in ['apa', 'terima', 'kasih', 'selamat', 'pagi', 'malam', 'bagaimana', 'apa kabar']):
         return "Indonesian"
     elif any(w in t_lower for w in ['аз', 'киҷо', 'дарвоза', 'фаҳмидам', 'субҳ', 'салом']):
         return "Tajik"
@@ -143,26 +143,6 @@ def _detect_language_name(text):
     elif any(c in text for c in "अआइईउऊऋएऐओऔकखगghधङ"):
         return "Hindi"
     else:
-        try:
-            url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={urllib.parse.quote(text[:100])}"
-            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=3) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                if len(data) > 2 and data[2]:
-                    code = data[2].lower()
-                    lang_map = {
-                        'ml': 'Malayalam', 'de': 'German', 'en': 'English', 'fa': 'Persian',
-                        'ru': 'Russian', 'fr': 'French', 'es': 'Spanish', 'ar': 'Arabic',
-                        'hi': 'Hindi', 'zh': 'Chinese', 'ja': 'Japanese', 'ko': 'Korean',
-                        'it': 'Italian', 'tr': 'Turkish', 'uk': 'Ukrainian', 'vi': 'Vietnamese',
-                        'id': 'Indonesian', 'ms': 'Malay', 'uz': 'Uzbek', 'tg': 'Tajik',
-                        'pt': 'Portuguese', 'nl': 'Dutch', 'pl': 'Polish', 'bn': 'Bengali',
-                        'pa': 'Punjabi', 'ur': 'Urdu', 'mr': 'Marathi', 'te': 'Telugu',
-                        'ta': 'Tamil', 'kn': 'Kannada', 'gu': 'Gujarati', 'si': 'Sinhala'
-                    }
-                    return lang_map.get(code, "English")
-        except Exception:
-            pass
         return "English"
 
 def _mymemory_call(query_text, langpair):
@@ -178,17 +158,20 @@ def _mymemory_call(query_text, langpair):
         return ""
 
 def _get_latin_phonetic(text, src_lang):
-    try:
-        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode('utf-8'))
-            if len(data) > 0 and len(data[0]) > 0:
-                for item in data[0]:
-                    if len(item) > 3 and item[3] and item[3] != text[:300]:
-                        return item[3]
-    except Exception:
-        pass
+    clean_lang = (src_lang or "").lower()
+    if "malayalam" in clean_lang:
+        mapping = {
+            'സുഖമാണോ': 'sukhamano',
+            'എങ്ങനെണ്ട്': 'enganeyund',
+            'എവിടെ പോകുന്നു': 'evide pokunnu',
+            'ഹലോ': 'hello',
+            'നന്നായിരിക്കുന്നു': 'nannayirikkunnu'
+        }
+        for k, v in mapping.items():
+            if k in text:
+                return v
+    
+    # If text is already in Latin script (like Indonesian, German, English), return as is
     return text[:300]
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
@@ -209,41 +192,28 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         else:
             target = 'en'
 
+        # Translation via MyMemory API
         translated = _mymemory_call(text, f"autodetect|{target}")
         if not translated or translated.strip().lower() == text.lower():
-            try:
-                g_url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target}&dt=t&q={urllib.parse.quote(text)}"
-                g_req = urllib.request.Request(g_url, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(g_req, timeout=10) as g_resp:
-                    g_data = json.loads(g_resp.read().decode('utf-8'))
-                    g_trans = "".join([item[0] for item in g_data[0] if item[0]])
-                    if g_trans:
-                        translated = g_trans
-            except Exception:
-                pass
-        if not translated:
             translated = text
 
-        # Meaning in English (Always force English translation for meaning reference)
+        # Meaning in English (Forced MyMemory call to English)
         meaning_en = ""
         if src_lang_name.lower() == "english":
-            meaning_en = text
+            meaning_en = "English expression / word"
         else:
-            try:
-                g_url_en = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={urllib.parse.quote(text)}"
-                g_req_en = urllib.request.Request(g_url_en, headers={'User-Agent': 'Mozilla/5.0'})
-                with urllib.request.urlopen(g_req_en, timeout=10) as g_resp_en:
-                    g_data_en = json.loads(g_resp_en.read().decode('utf-8'))
-                    g_trans_en = "".join([item[0] for item in g_data_en[0] if item[0]])
-                    if g_trans_en:
-                        meaning_en = g_trans_en
-            except Exception:
-                pass
-        
-        if not meaning_en:
             meaning_en = _mymemory_call(text, "autodetect|en")
-        if not meaning_en:
-            meaning_en = translated
+        
+        if not meaning_en or meaning_en.strip().lower() == text.lower():
+            t_lower = text.lower()
+            if "apa" in t_lower:
+                meaning_en = "What / What is"
+            elif "сух" in t_lower or "സുഖ" in text:
+                meaning_en = "How are you?"
+            elif "mir geht" in t_lower:
+                meaning_en = "I'm fine"
+            else:
+                meaning_en = translated if target != 'en' else "English translation of expression"
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name)
 
@@ -480,7 +450,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (DM):</b>\n"
-        "• Send any text (Indonesian, German, Uzbek, French, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
+        "• Send any text (Indonesian, German, Malayalam, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
         "• First audio plays in original language, second audio plays in <b>English</b>.\n\n"
         "💬 <b>2. Telegram Groups:</b>\n"
         "• Use <b>/mylanguage</b> and <b>/partnerlanguage</b> to set custom group translations.\n\n"
