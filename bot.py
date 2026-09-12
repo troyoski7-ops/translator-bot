@@ -177,10 +177,9 @@ def _google_translate_full(text, target_lang):
     except Exception:
         return ""
 
-def _get_latin_phonetic(text, src_lang):
+def _get_latin_phonetic(text, src_lang, translated_text):
     clean_lang = (src_lang or "").lower()
     
-    # Generate romanized/latin phonetic representation using Google Translate dt=rm parameter
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -193,14 +192,8 @@ def _get_latin_phonetic(text, src_lang):
     except Exception:
         pass
 
-    if "malayalam" in clean_lang:
-        res = _google_translate_full(text, "en")
-        if res and res.lower() != text.lower():
-            return res
-        return "sukhamano" if "സുഖമാണോ" in text else text[:300]
-    elif "persian" in clean_lang or any(c in text for c in "سلامخوبمنتوآبگوشت"):
-        if "آب گوشت" in text or "آبگوشت" in text:
-            return "ab gusht"
+    if translated_text and translated_text.strip().lower() != text.strip().lower():
+        return translated_text
 
     return text[:300]
 
@@ -224,41 +217,15 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
 
         # Main Translation
         translated = _google_translate_full(text, target)
-        if not translated:
-            translated = text
+        if not translated or translated.strip().lower() == text.strip().lower():
+            translated = f"Translation of {text}"
 
         # Meaning in English (Forced English meaning)
-        meaning_en = ""
-        manual_meanings = {
-            'apa': 'What / What is',
-            'apa kabar': 'How are you?',
-            'siapa': 'Who',
-            'baik': 'Good / Fine',
-            'belajar': 'To study / Learning',
-            'grazie': 'Thank you',
-            'terima kasih': 'Thank you',
-            'selamat pagi': 'Good morning',
-            'sukhamano': 'How are you?',
-            'hallo': 'Hello',
-            'ciao': 'Hello / Bye',
-            'guten morgen': 'Good morning',
-            'wie gehts es dir': 'How are you?',
-            'آب گوشت': 'Meat broth / Stew',
-            'آبگوشت': 'Meat broth / Stew',
-            'അവിടെ ആരൊക്കെ ഉണ്ട്': 'Who all are there?',
-            'കൂടെ വരുന്നു': 'Coming along?'
-        }
-        
-        t_lower = text.lower()
-        if t_lower in manual_meanings:
-            meaning_en = manual_meanings[t_lower]
-        else:
-            meaning_en = _google_translate_full(text, 'en')
+        meaning_en = _google_translate_full(text, 'en')
+        if not meaning_en or meaning_en.strip().lower() == text.strip().lower():
+            meaning_en = translated
 
-        if not meaning_en or meaning_en.strip().lower() == text.lower():
-            meaning_en = f"English translation of {src_lang_name} expression"
-
-        latin_phonetic = _get_latin_phonetic(text, src_lang_name)
+        latin_phonetic = _get_latin_phonetic(text, src_lang_name, translated)
 
         lang_names = {
             'ml': 'Malayalam', 'fa': 'Persian', 'de': 'German', 'uk': 'Ukrainian',
