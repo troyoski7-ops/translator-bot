@@ -121,7 +121,7 @@ def get_voice_info(lang_name):
 def _detect_language_name(text):
     t_lower = text.lower().strip()
     
-    indonesian_words = {'apa', 'siapa', 'baik', 'terima', 'kasih', 'selamat', 'pagi', 'malam', 'bagaimana', 'kabar', 'ya', 'tidak', 'saya', 'kamu'}
+    indonesian_words = {'apa', 'siapa', 'baik', 'terima', 'kasih', 'selamat', 'pagi', 'malam', 'bagaimana', 'kabar', 'ya', 'tidak', 'saya', 'kamu', 'belajar'}
     italian_words = {'grazie', 'ciao', 'buongiorno', 'buonasera', 'prego', 'per favore', 'come', 'stai', 'bene', 'arrivederci'}
     german_words = {'mir', 'gehts', 'gut', 'sprechen', 'deutsch', 'guten', 'morgen', 'hallo', 'wie', 'ich', 'und', 'ist', 'das', 'ein'}
     uzbek_words = {'qayerda', 'qayerga', 'qanday', 'salom', 'rahmat', 'yaxshi', 'qalebsiz', 'keling'}
@@ -131,7 +131,7 @@ def _detect_language_name(text):
         return "Indonesian"
     if words_in_text.intersection(italian_words) or any(w in t_lower for w in ['grazie', 'buongiorno']):
         return "Italian"
-    if words_in_text.intersection(german_words) or any(w in t_lower for w in ['mir gehts', 'guten morgen']):
+    if words_in_text.intersection(german_words) or any(w in t_lower for w in ['mir gehts', 'guten morgen', 'wie gehts']):
         return "German"
     if words_in_text.intersection(uzbek_words):
         return "Uzbek"
@@ -140,7 +140,7 @@ def _detect_language_name(text):
         return "Malayalam"
     elif any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"):
         return "Russian"
-    elif any(c in text for c in "سلام,خوب,من,تو,است,در,از,به,با,این,آن"):
+    elif any(c in text for c in "سلام,خوب,من,تو,است,در,از,به,با,این,آن,آب,گوشت"):
         return "Persian"
     elif any(c in text for c in "ñáéíóúÑÁÉÍÓÚ"):
         return "Spanish"
@@ -151,6 +151,9 @@ def _detect_language_name(text):
     elif any(c in text for c in "अआइईउऊऋएऐओऔकखगghधङ"):
         return "Hindi"
     else:
+        english_common = {'hello', 'hi', 'how', 'are', 'you', 'good', 'morning', 'night', 'thank', 'thanks', 'yes', 'no', 'what', 'who'}
+        if words_in_text.intersection(english_common):
+            return "English"
         return "English"
 
 def _mymemory_call(query_text, langpair):
@@ -167,7 +170,15 @@ def _mymemory_call(query_text, langpair):
 
 def _get_latin_phonetic(text, src_lang):
     clean_lang = (src_lang or "").lower()
-    if "malayalam" in clean_lang:
+    
+    # Specific Romanized mappings or API phonetic lookups for non-Latin scripts
+    if "persian" in clean_lang or any(c in text for c in "سلامخوبمنتوآبگوشت"):
+        res = _mymemory_call(text, "fa|en")
+        if res and res.lower() != text.lower():
+            return res
+        if "آب گوشت" in text or "آبگوشت" in text:
+            return "ab gusht"
+    elif "malayalam" in clean_lang:
         res = _mymemory_call(text, "ml|en")
         if res and res.lower() != text.lower():
             return res
@@ -176,6 +187,7 @@ def _get_latin_phonetic(text, src_lang):
         res = _mymemory_call(text, "ru|en")
         if res and res.lower() != text.lower():
             return res
+
     return text[:300]
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
@@ -196,7 +208,6 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         else:
             target = 'en'
 
-        # Map language name to code for translation
         lang_code_map = {
             'indonesian': 'id', 'italian': 'it', 'german': 'de', 'uzbek': 'uz',
             'malayalam': 'ml', 'russian': 'ru', 'persian': 'fa', 'spanish': 'es',
@@ -221,6 +232,7 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             'apa kabar': 'How are you?',
             'siapa': 'Who',
             'baik': 'Good / Fine',
+            'belajar': 'To study / Learning',
             'grazie': 'Thank you',
             'terima kasih': 'Thank you',
             'selamat pagi': 'Good morning',
@@ -228,7 +240,9 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             'hallo': 'Hello',
             'ciao': 'Hello / Bye',
             'guten morgen': 'Good morning',
-            'wie gehts es dir': 'How are you?'
+            'wie gehts es dir': 'How are you?',
+            'آب گوشت': 'Meat broth / Stew',
+            'آبگوشت': 'Meat broth / Stew'
         }
         
         t_lower = text.lower()
@@ -478,7 +492,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (DM):</b>\n"
-        "• Send any text (Indonesian, Italian, German, Malayalam, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
+        "• Send any text (Persian, Indonesian, Italian, German, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
         "• First audio plays in original language, second audio plays in <b>English</b>.\n\n"
         "💬 <b>2. Telegram Groups:</b>\n"
         "• Use <b>/mylanguage</b> and <b>/partnerlanguage</b> to set custom group translations.\n\n"
