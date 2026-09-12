@@ -198,37 +198,44 @@ def _get_latin_phonetic(text, src_lang):
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     try:
-        target = 'en'
-        if is_group:
-            chat_key = str(chat_id)
-            user_str = str(user_id) if user_id else ""
-            
-            # Smart Two-Way Group Routing: 
-            # If sender has set their personal language, translate to the OTHER person's preferred language or group partner setting.
-            user_langs = context_data.get("user_lang", {}) if context_data else {}
-            group_partners = context_data.get("chat_target_lang", {}) if context_data else {}
-            
-            partner_lang = group_partners.get(chat_key, 'ru') # Default partner target if not set
-            sender_lang = user_langs.get(user_str, '')
-
-            # Detect source language of the text message
-            src_detected = _detect_language_name(text).lower()
-            
-            # If sender is using their own language, translate to partner/group target language
-            # If sender is using partner language, translate back to sender's / group member language
-            if sender_lang and sender_lang in src_detected:
-                target = partner_lang
-            else:
-                # If someone else replies, send it to the active user's language or fallback
-                target = sender_lang if sender_lang else partner_lang
-                if target == src_detected or target[:2] == src_detected[:2]:
-                    target = partner_lang if partner_lang != target else 'en'
-        else:
-            if user_id and context_data and "user_lang" in context_data:
-                target = context_data["user_lang"].get(str(user_id), 'en')
-
         text = str(text).strip()
         src_lang_name = _detect_language_name(text)
+        src_lower = src_lang_name.lower()
+
+        target = 'en'
+        if is_group:
+            # Group Two-Way Smart Logic: 
+            # If sender's text is Malayalam -> Translate to Russian (or partner's language)
+            # If sender's text is Russian -> Translate to Malayalam (or user's preferred language)
+            if "malayalam" in src_lower:
+                target = 'ru'
+            elif "russian" in src_lower:
+                target = 'ml'
+            else:
+                user_langs = context_data.get("user_lang", {}) if context_data else {}
+                group_partners = context_data.get("chat_target_lang", {}) if context_data else {}
+                chat_key = str(chat_id) if chat_id else ""
+                user_str = str(user_id) if user_id else ""
+                
+                partner_lang = group_partners.get(chat_key, 'ru')
+                sender_lang = user_langs.get(user_str, '')
+
+                if sender_lang and sender_lang in src_lower:
+                    target = partner_lang
+                else:
+                    target = sender_lang if sender_lang else partner_lang
+                    if target == src_lower or target[:2] == src_lower[:2]:
+                        target = partner_lang if partner_lang != target else 'en'
+        else:
+            # Personal Chat Smart Auto Two-Way (Malayalam <-> Russian default)
+            if "malayalam" in src_lower:
+                target = 'ru'
+            elif "russian" in src_lower:
+                target = 'ml'
+            else:
+                target = 'en'
+                if user_id and context_data and "user_lang" in context_data:
+                    target = context_data["user_lang"].get(str(user_id), 'en')
 
         translated = _mymemory_call(text, f"autodetect|{target}")
         if not translated or translated.strip().lower() == text.lower():
@@ -369,7 +376,7 @@ async def set_group_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def mylanguage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if chat.type not in ["group", "supergroup"]:
-        await update.message.reply_text("ℹ️ My Language setting is designed for groups. In personal chats, translations automatically use default or custom text!")
+        await update.message.reply_text("ℹ️ My Language setting is designed for groups.")
         return
     keyboard = [
         [InlineKeyboardButton("🇮🇳 Malayalam", callback_data="set_my_ml"), InlineKeyboardButton("🇬🇧 English", callback_data="set_my_en")],
@@ -407,7 +414,7 @@ async def mylanguage_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🇰🇿 Kazakh", callback_data="set_my_kk"), InlineKeyboardButton("🇹🇯 Tajik", callback_data="set_my_tg")],
     ]
     await update.message.reply_text(
-        "🌍 <b>My Language (ഗ്രൂപ്പിലെ നിങ്ങളുടെ ഭാഷ):</b>\nSelect your language for this group:",
+        "🌍 <b>My Language:</b>\nSelect your language for this group:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -415,7 +422,7 @@ async def mylanguage_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def partnerlanguage_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.effective_chat
     if chat.type not in ["group", "supergroup"]:
-        await update.message.reply_text("ℹ️ Partner Language is designed for groups. In personal chats, translations automatically use your settings!")
+        await update.message.reply_text("ℹ️ Partner Language is designed for groups.")
         return
     keyboard = [
         [InlineKeyboardButton("🇷🇺 Russian", callback_data="set_partner_ru"), InlineKeyboardButton("🇮🇳 Malayalam", callback_data="set_partner_ml")],
@@ -425,7 +432,7 @@ async def partnerlanguage_command(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("🇮🇳 Hindi", callback_data="set_partner_hi"), InlineKeyboardButton("🇸🇦 Arabic", callback_data="set_partner_ar")],
     ]
     await update.message.reply_text(
-        "👥 <b>Partner's Language (അപ്പുറത്തെ ആളുടെ ഭാഷ):</b>\nSelect the target language for this group:",
+        "👥 <b>Partner's Language:</b>\nSelect the target language for this group:",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -545,9 +552,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🌌 <b>QUANTUM TWO-WAY TRANSLATION BRIDGE</b> 🌌\n"
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
-        "💬 <b>1. Translation Setup:</b>\n"
-        "• In <b>Personal Chat</b>, translations work automatically.\n"
-        "• In <b>Groups</b>, use <b>/mylanguage</b> and <b>/partnerlanguage</b> to configure languages!\n\n"
+        "💬 <b>1. Personal Chat (DM):</b>\n"
+        "• Automatically translates between languages (e.g., Malayalam to Russian and vice versa) instantly without any settings!\n\n"
+        "💬 <b>2. Telegram Groups:</b>\n"
+        "• Use <b>/mylanguage</b> to set your preferred language (e.g. Malayalam).\n"
+        "• Use <b>/partnerlanguage</b> to set partner's language (e.g. Russian).\n"
+        "• Once set, messages automatically translate back and forth between both languages!\n\n"
         "<b>Commands:</b>\n"
         "🌍 /mylanguage • Set Your Language [Groups]\n"
         "🔄 /changelanguage • Change Language [Groups]\n"
@@ -609,13 +619,13 @@ async def start_lang_button_callback(update: Update, context: ContextTypes.DEFAU
 
     if data in ["open_mylang_menu", "open_changelang_menu"]:
         await query.message.reply_text(
-            "🌍 <b>Choose Your Language (ഗ്രൂപ്പിലെ നിങ്ങളുടെ ഭാഷ):</b>",
+            "🌍 <b>Choose Your Language:</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     elif data == "open_partnerlang_menu":
         await query.message.reply_text(
-            "👥 <b>Choose Partner's Language (അപ്പുറത്തെ ആളുടെ ഭാഷ):</b>",
+            "👥 <b>Choose Partner's Language:</b>",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup(partner_keyboard)
         )
