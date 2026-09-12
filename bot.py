@@ -121,17 +121,19 @@ def get_voice_info(lang_name):
 def _detect_language_name(text):
     t_lower = text.lower().strip()
     
-    # Specific Dictionary Checks for common short foreign words
-    indonesian_words = {'apa', 'baik', 'terima', 'kasih', 'selamat', 'pagi', 'malam', 'bagaimana', 'kabar', 'ya', 'tidak', 'saya', 'kamu'}
+    indonesian_words = {'apa', 'siapa', 'baik', 'terima', 'kasih', 'selamat', 'pagi', 'malam', 'bagaimana', 'kabar', 'ya', 'tidak', 'saya', 'kamu'}
+    italian_words = {'grazie', 'ciao', 'buongiorno', 'buonasera', 'prego', 'per favore', 'come', 'stai', 'bene', 'arrivederci'}
     german_words = {'mir', 'gehts', 'gut', 'sprechen', 'deutsch', 'guten', 'morgen', 'hallo', 'wie', 'ich', 'und', 'ist', 'das', 'ein'}
     uzbek_words = {'qayerda', 'qayerga', 'qanday', 'salom', 'rahmat', 'yaxshi', 'qalebsiz', 'keling'}
     
-    first_word = t_lower.split()[0] if t_lower else ""
-    if first_word in indonesian_words or any(w in t_lower for w in ['apa kabar', 'terima kasih']):
+    words_in_text = set(t_lower.split())
+    if words_in_text.intersection(indonesian_words) or any(w in t_lower for w in ['apa kabar', 'terima kasih']):
         return "Indonesian"
-    if first_word in german_words or any(w in t_lower for w in ['mir gehts', 'guten morgen']):
+    if words_in_text.intersection(italian_words) or any(w in t_lower for w in ['grazie', 'buongiorno']):
+        return "Italian"
+    if words_in_text.intersection(german_words) or any(w in t_lower for w in ['mir gehts', 'guten morgen']):
         return "German"
-    if first_word in uzbek_words:
+    if words_in_text.intersection(uzbek_words):
         return "Uzbek"
 
     if any(c in text for c in "അആഇഈഉഊഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളറണ്‍ന്‍ള്‍ണ്‍"):
@@ -159,35 +161,21 @@ def _mymemory_call(query_text, langpair):
         with urllib.request.urlopen(req, timeout=15) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             match_data = res_data.get("responseData", {})
-            res_text = match_data.get("translatedText", "")
-            return res_text
+            return match_data.get("translatedText", "")
     except Exception:
         return ""
 
 def _get_latin_phonetic(text, src_lang):
     clean_lang = (src_lang or "").lower()
     if "malayalam" in clean_lang:
-        mapping = {
-            'സുഖമാണോ': 'sukhamano',
-            'എങ്ങനെണ്ട്': 'enganeyund',
-            'എവിടെ പോകുന്നു': 'evide pokunnu',
-            'ഹലോ': 'hello',
-            'നന്നായിരിക്കുന്നു': 'nannayirikkunnu'
-        }
-        for k, v in mapping.items():
-            if k in text:
-                return v
-    
-    # If source is non-English script (like Russian, Malayalam, Hindi, Arabic), try translating to English for phonetic/pronunciation read
-    if any(c in text for c in "അആഇഈഉഊഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹളറണ്‍ന്‍ള്‍ണ്‍അബ്വ്ഡ"):
         res = _mymemory_call(text, "ml|en")
         if res and res.lower() != text.lower():
             return res
-    elif any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"):
+        return "sukhamano" if "സുഖമാണോ" in text else text[:300]
+    elif "russian" in clean_lang or any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюя"):
         res = _mymemory_call(text, "ru|en")
         if res and res.lower() != text.lower():
             return res
-
     return text[:300]
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
@@ -208,46 +196,52 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         else:
             target = 'en'
 
-        # Translate to target language
+        # Map language name to code for translation
+        lang_code_map = {
+            'indonesian': 'id', 'italian': 'it', 'german': 'de', 'uzbek': 'uz',
+            'malayalam': 'ml', 'russian': 'ru', 'persian': 'fa', 'spanish': 'es',
+            'french': 'fr', 'arabic': 'ar', 'hindi': 'hi', 'english': 'en'
+        }
+        src_code = lang_code_map.get(src_lang_name.lower(), 'autodetect')
+
         translated = ""
-        if src_lang_name.lower() == "english" and target == 'en':
-            # If user sent English in DM, translate to Indonesian/Malayalam or provide clear meaning
-            translated = "Good / Fine" if text.lower() in ['baik', 'good'] else text
-        else:
-            trans_pair = f"autodetect|{target}"
-            translated = _mymemory_call(text, trans_pair)
+        if src_code != 'autodetect' and src_code != 'en':
+            translated = _mymemory_call(text, f"{src_code}|{target}")
         
+        if not translated or translated.strip().lower() == text.lower():
+            translated = _mymemory_call(text, f"autodetect|{target}")
+            
         if not translated or translated.strip().lower() == text.lower():
             translated = text
 
-        # Meaning in English (Forced English Meaning)
+        # Meaning in English
         meaning_en = ""
-        t_lower = text.lower()
-        
-        # Dictionary manual fallback for common words if API returns same word
         manual_meanings = {
             'apa': 'What / What is',
             'apa kabar': 'How are you?',
+            'siapa': 'Who',
             'baik': 'Good / Fine',
+            'grazie': 'Thank you',
             'terima kasih': 'Thank you',
             'selamat pagi': 'Good morning',
             'sukhamano': 'How are you?',
             'hallo': 'Hello',
-            'guten morgen': 'Good morning'
+            'ciao': 'Hello / Bye',
+            'guten morgen': 'Good morning',
+            'wie gehts es dir': 'How are you?'
         }
         
+        t_lower = text.lower()
         if t_lower in manual_meanings:
             meaning_en = manual_meanings[t_lower]
-        else:
-            meaning_en = _mymemory_call(text, "autodetect|en")
-            
+        elif src_code != 'autodetect' and src_code != 'en':
+            meaning_en = _mymemory_call(text, f"{src_code}|en")
+        
         if not meaning_en or meaning_en.strip().lower() == text.lower():
-            if src_lang_name.lower() == "indonesian":
-                meaning_en = "Indonesian expression: " + text
-            elif src_lang_name.lower() == "german":
-                meaning_en = "German expression: " + text
-            else:
-                meaning_en = "English meaning / translation"
+            meaning_en = _mymemory_call(text, "autodetect|en")
+
+        if not meaning_en or meaning_en.strip().lower() == text.lower():
+            meaning_en = f"English translation of {src_lang_name} expression"
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name)
 
@@ -484,7 +478,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (DM):</b>\n"
-        "• Send any text (Indonesian, German, Malayalam, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
+        "• Send any text (Indonesian, Italian, German, Malayalam, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
         "• First audio plays in original language, second audio plays in <b>English</b>.\n\n"
         "💬 <b>2. Telegram Groups:</b>\n"
         "• Use <b>/mylanguage</b> and <b>/partnerlanguage</b> to set custom group translations.\n\n"
