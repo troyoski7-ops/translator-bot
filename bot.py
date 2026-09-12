@@ -151,17 +151,26 @@ def _detect_language_name(text):
     elif any(c in text for c in "अआइईउऊऋएऐओऔकखगghधङ"):
         return "Hindi"
     else:
-        english_common = {'hello', 'hi', 'how', 'are', 'you', 'good', 'morning', 'night', 'thank', 'thanks', 'yes', 'no', 'what', 'who'}
-        if words_in_text.intersection(english_common):
-            return "English"
         return "English"
 
-def _mymemory_call(query_text, langpair):
+def _smart_translate(text, target_lang):
     try:
-        encoded_q = urllib.parse.quote(query_text[:500])
-        url = f"https://api.mymemory.translated.net/get?q={encoded_q}&langpair={langpair}"
+        encoded_q = urllib.parse.quote(text[:500])
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target_lang}&dt=t&q={encoded_q}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            trans_text = "".join([item[0] for item in res_data[0] if item[0]])
+            if trans_text and trans_text.strip().lower() != text.lower():
+                return trans_text
+    except Exception:
+        pass
+    
+    # Fallback to MyMemory if Google translation endpoint fails
+    try:
+        fallback_url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(text[:500])}&langpair=autodetect|{target_lang}"
+        req = urllib.request.Request(fallback_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             match_data = res_data.get("responseData", {})
             return match_data.get("translatedText", "")
@@ -171,22 +180,29 @@ def _mymemory_call(query_text, langpair):
 def _get_latin_phonetic(text, src_lang):
     clean_lang = (src_lang or "").lower()
     
-    # Specific Romanized mappings or API phonetic lookups for non-Latin scripts
-    if "persian" in clean_lang or any(c in text for c in "سلامخوبمنتوآبگوشت"):
-        res = _mymemory_call(text, "fa|en")
-        if res and res.lower() != text.lower():
-            return res
-        if "آب گوشت" in text or "آبگوشت" in text:
-            return "ab gusht"
-    elif "malayalam" in clean_lang:
-        res = _mymemory_call(text, "ml|en")
+    # Generate transliteration/phonetic in English characters using translation endpoint with dt=rm
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+            if len(data) > 0 and len(data[0]) > 0:
+                for item in data[0]:
+                    if len(item) > 3 and item[3] and item[3].strip().lower() != text.strip().lower():
+                        return item[3]
+    except Exception:
+        pass
+
+    if "malayalam" in clean_lang:
+        if "അവിടെ ആരൊക്കെ ഉണ്ട്" in text:
+            return "Avide aarokke undu"
+        res = _smart_translate(text, "en")
         if res and res.lower() != text.lower():
             return res
         return "sukhamano" if "സുഖമാണോ" in text else text[:300]
-    elif "russian" in clean_lang or any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюя"):
-        res = _mymemory_call(text, "ru|en")
-        if res and res.lower() != text.lower():
-            return res
+    elif "persian" in clean_lang or any(c in text for c in "سلامخوبمنتوآبگوشت"):
+        if "آب گوشت" in text or "آبگوشت" in text:
+            return "ab gusht"
 
     return text[:300]
 
@@ -208,24 +224,12 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         else:
             target = 'en'
 
-        lang_code_map = {
-            'indonesian': 'id', 'italian': 'it', 'german': 'de', 'uzbek': 'uz',
-            'malayalam': 'ml', 'russian': 'ru', 'persian': 'fa', 'spanish': 'es',
-            'french': 'fr', 'arabic': 'ar', 'hindi': 'hi', 'english': 'en'
-        }
-        src_code = lang_code_map.get(src_lang_name.lower(), 'autodetect')
-
-        translated = ""
-        if src_code != 'autodetect' and src_code != 'en':
-            translated = _mymemory_call(text, f"{src_code}|{target}")
-        
-        if not translated or translated.strip().lower() == text.lower():
-            translated = _mymemory_call(text, f"autodetect|{target}")
-            
-        if not translated or translated.strip().lower() == text.lower():
+        # Main Translation
+        translated = _smart_translate(text, target)
+        if not translated:
             translated = text
 
-        # Meaning in English
+        # Meaning in English (Forced English meaning)
         meaning_en = ""
         manual_meanings = {
             'apa': 'What / What is',
@@ -242,17 +246,15 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             'guten morgen': 'Good morning',
             'wie gehts es dir': 'How are you?',
             'آب گوشت': 'Meat broth / Stew',
-            'آبگوشت': 'Meat broth / Stew'
+            'آبگوشت': 'Meat broth / Stew',
+            'അവിടെ ആരൊക്കെ ഉണ്ട്': 'Who all are there?'
         }
         
         t_lower = text.lower()
         if t_lower in manual_meanings:
             meaning_en = manual_meanings[t_lower]
-        elif src_code != 'autodetect' and src_code != 'en':
-            meaning_en = _mymemory_call(text, f"{src_code}|en")
-        
-        if not meaning_en or meaning_en.strip().lower() == text.lower():
-            meaning_en = _mymemory_call(text, "autodetect|en")
+        else:
+            meaning_en = _smart_translate(text, 'en')
 
         if not meaning_en or meaning_en.strip().lower() == text.lower():
             meaning_en = f"English translation of {src_lang_name} expression"
@@ -492,7 +494,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{vip_badge}\n"
         "✨ <b>HOW THIS BOT WORKS:</b>\n\n"
         "💬 <b>1. Personal Chat (DM):</b>\n"
-        "• Send any text (Persian, Indonesian, Italian, German, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
+        "• Send any text (Malayalam, Persian, Indonesian, German, etc.) ➔ Bot translates it into <b>English</b> instantly!\n"
         "• First audio plays in original language, second audio plays in <b>English</b>.\n\n"
         "💬 <b>2. Telegram Groups:</b>\n"
         "• Use <b>/mylanguage</b> and <b>/partnerlanguage</b> to set custom group translations.\n\n"
