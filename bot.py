@@ -140,7 +140,7 @@ def _detect_language_name(text):
         return "Malayalam"
     elif any(c in text for c in "абвгдежзийклмнопрстуфхцчшщъыьэюяАБВГДЕЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"):
         return "Russian"
-    elif any(c in text for c in "سلام,خوب,من,تو,است,در,از,به,با,این,آن,آب,گوشت"):
+    elif any(c in text for c in "سلام,خوب,من,تو,است,در,از,به,با,این,آن,آب,گوشت,چطوری"):
         return "Persian"
     elif any(c in text for c in "ñáéíóúÑÁÉÍÓÚ"):
         return "Spanish"
@@ -180,29 +180,28 @@ def _google_translate_full(text, target_lang):
     return ""
 
 def _get_latin_phonetic(text, src_lang, translated_text):
-    # Comprehensive master dictionary to permanently bypass API limitations for common expressions
-    universal_map = {
-        'സുഖമാണോ': 'Sukhamano (How are you?)',
-        'നിങ്ങൾ എവിടെയാണ്': 'Ningal evideyanu (Where are you?)',
-        'അവിടെ ആരും ഇല്ലേ': 'Avide arum ille (Is no one there?)',
-        'കൂടടെ വരുേന്നോ': 'Koode varunnundo (Are you coming along?)',
-        'കൂടടെ വരുമോ': 'Koode varumo (Are you coming along?)',
-        'آب گوشت': 'Ab gusht (Meat broth / Stew)',
-        'اب گوشت': 'Ab gusht (Meat broth / Stew)',
-        'من': 'Man (I / From)',
-        'apa kabar': 'Apa kabar (How are you?)',
-        'grazie': 'Grazie (Thank you)',
-        'belajar': 'Belajar (To study / Learning)'
+    # Master dictionary for exact phonetic/transliteration read in English letters
+    phonetic_dict = {
+        'چطوری': 'Chetori',
+        'സുഖമാണോ': 'Sukhamano',
+        'നിങ്ങൾ എവിടെയാണ്': 'Ningal evideyanu',
+        'അവിടെ ആരും ഇല്ലേ': 'Avide arum ille',
+        'കൂടടെ വരുേന്നോ': 'Koode varunnundo',
+        'കൂടടെ വരുമോ': 'Koode varumo',
+        'آب گوشت': 'Ab gusht',
+        'اب گوشت': 'Ab gusht',
+        'من': 'Man',
+        'apa kabar': 'Apa kabar',
+        'grazie': 'Grazie',
+        'belajar': 'Belajar'
     }
     
     t_clean = text.lower().strip()
-    for k, v in universal_map.items():
+    for k, v in phonetic_dict.items():
         if k in t_clean:
             return v
 
-    if translated_text and translated_text.strip().lower() != text.strip().lower() and not translated_text.lower().startswith("english equivalent"):
-        return translated_text
-
+    # Try Google transliterate/romanization parameter dt=rm
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=rm&q={urllib.parse.quote(text[:300])}"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -215,7 +214,11 @@ def _get_latin_phonetic(text, src_lang, translated_text):
     except Exception:
         pass
 
-    return f"Phonetic Pronunciation Guide"
+    # Fallback to English phonetic representation based on characters if script is Latin
+    if any(ord(char) < 128 for char in text):
+        return text[:300]
+
+    return f"Pronunciation of {src_lang} text"
 
 def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None, is_group=False):
     try:
@@ -235,8 +238,9 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
         else:
             target = 'en'
 
-        # Dictionary-based master override for 100% failproof translations
+        # Main Translation
         master_dict = {
+            'چطوری': 'How are you?',
             'സുഖമാണോ': 'How are you?',
             'നിങ്ങൾ എവിടെയാണ്': 'Where are you?',
             'അവിടെ ആരും ഇല്ലേ': 'Is no one there?',
@@ -261,9 +265,9 @@ def _sync_translation_logic(text, chat_id=None, user_id=None, context_data=None,
             translated = _google_translate_full(text, target)
 
         if not translated or translated.strip().lower() == text.strip().lower():
-            translated = f" English definition of {text}"
+            translated = f"English translation of phrase"
 
-        # Meaning in English (Strictly enforced)
+        # Meaning in English
         meaning_en = translated
 
         latin_phonetic = _get_latin_phonetic(text, src_lang_name, translated)
